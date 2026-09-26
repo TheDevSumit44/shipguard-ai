@@ -1,0 +1,66 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import * as Sentry from '@sentry/react';
+import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
+import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from './components/ui/ErrorBoundary';
+import './index.css';
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+const sentryEnableDev = String(import.meta.env.VITE_SENTRY_ENABLE_DEV || '').toLowerCase() === 'true';
+const sentryEnabled = Boolean(sentryDsn) && (import.meta.env.PROD || sentryEnableDev);
+
+if (sentryEnabled) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE || 0.1),
+    ignoreErrors: [
+      /Failed to fetch dynamically imported module/i,
+      /Importing a module script failed/i,
+    ],
+    beforeSend(event, hint) {
+      const errorMessage = String(hint?.originalException?.message || '').toLowerCase();
+      if (errorMessage.includes('failed to fetch dynamically imported module')) {
+        return null;
+      }
+      return event;
+    },
+  });
+  window.Sentry = Sentry;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <ErrorBoundary>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <AuthProvider>
+          <App />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1e293b',
+                color: '#f1f5f9',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                fontSize: '14px',
+                boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+              },
+              success: { iconTheme: { primary: '#22c55e', secondary: '#f1f5f9' } },
+              error: { iconTheme: { primary: '#ef4444', secondary: '#f1f5f9' } },
+            }}
+          />
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+  </React.StrictMode>
+);

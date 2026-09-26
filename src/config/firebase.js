@@ -1,0 +1,39 @@
+import { initializeApp } from 'firebase/app';
+import { getAnalytics, isSupported } from 'firebase/analytics';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { initializeFirestore } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+
+const forceLongPolling =
+  String(import.meta.env.VITE_FIRESTORE_FORCE_LONG_POLLING || '').toLowerCase() === 'true' ||
+  import.meta.env.DEV;
+
+const autoDetectLongPolling =
+  String(import.meta.env.VITE_FIRESTORE_AUTO_DETECT_LONG_POLLING || 'true').toLowerCase() !== 'false';
+
+export const analyticsPromise =
+  typeof window !== 'undefined'
+    ? isSupported()
+        .then((supported) => (supported ? getAnalytics(app) : null))
+        .catch(() => null)
+    : Promise.resolve(null);
+
+export const auth = getAuth(app);
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: forceLongPolling,
+  experimentalAutoDetectLongPolling: forceLongPolling ? false : autoDetectLongPolling,
+  useFetchStreams: !forceLongPolling,
+});
+export const googleProvider = new GoogleAuthProvider();
+export default app;
