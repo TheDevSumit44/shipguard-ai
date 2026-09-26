@@ -128,7 +128,7 @@ Ensure you have the following installed:
 
 ```bash
 # Clone the repository
-git clone https://github.com/LegendarySumit/shipguard-ai.git
+git clone https://github.com/TheDevSumit44/shipguard-ai.git
 cd shipguard-ai
 
 # Install frontend dependencies
@@ -585,10 +585,10 @@ See [LICENSE](LICENSE) for full terms.
 
 ## 👨‍💻 Author
 
-**LegendarySumit**
+**TheDevSumit44**
 
-- GitHub: [@LegendarySumit](https://github.com/LegendarySumit)
-- Project Repository: [ShipGuard AI](https://github.com/LegendarySumit/shipguard-ai)
+- GitHub: [@TheDevSumit44](https://github.com/TheDevSumit44)
+- Project Repository: [ShipGuard AI](https://github.com/TheDevSumit44/shipguard-ai)
 - Live Demo: [Launch Platform](https://shipguard-ai.vercel.app)
 
 ---
