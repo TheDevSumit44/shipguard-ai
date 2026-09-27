@@ -608,22 +608,7 @@ async function runRetentionCleanup() {
 }
 
 function getServiceAccount() {
-  if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    return JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
-  }
-
-  if (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
-    const decoded = Buffer.from(env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf8');
-    return JSON.parse(decoded);
-  }
-
-  if (env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    const serviceAccountPath = path.isAbsolute(env.FIREBASE_SERVICE_ACCOUNT_PATH)
-      ? env.FIREBASE_SERVICE_ACCOUNT_PATH
-      : path.resolve(projectRoot, env.FIREBASE_SERVICE_ACCOUNT_PATH);
-    return JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-  }
-
+  // Check environment variables first (highest priority)
   if (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY) {
     return {
       type: 'service_account',
@@ -633,7 +618,28 @@ function getServiceAccount() {
     };
   }
 
-  return null;
+  // Check JSON string env var
+  if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    return JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  }
+
+  // Check base64 encoded JSON
+  if (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
+    const decoded = Buffer.from(env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf8');
+    return JSON.parse(decoded);
+  }
+
+  // Check file path only if it's explicitly set AND file exists
+  if (env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    const serviceAccountPath = path.isAbsolute(env.FIREBASE_SERVICE_ACCOUNT_PATH)
+      ? env.FIREBASE_SERVICE_ACCOUNT_PATH
+      : path.resolve(projectRoot, env.FIREBASE_SERVICE_ACCOUNT_PATH);
+    if (fs.existsSync(serviceAccountPath)) {
+      return JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    }
+  }
+
+  return;
 }
 
 let db = null;

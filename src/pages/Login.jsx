@@ -1,18 +1,24 @@
 import { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, UserCheck, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const ADMIN_EMAIL_WHITELIST = ['shirotprusty4444@gmail.com'];
 
 export default function Login() {
   const { login, loginWithGoogle, currentUser, authError, clearAuthError } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('admin');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const visibleError = error || authError;
+  
+  const isAdminRoleSelected = role === 'admin';
+  const isEmailAuthorizedForAdmin = email && ADMIN_EMAIL_WHITELIST.includes(email.trim());
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
@@ -24,16 +30,21 @@ export default function Login() {
     if (!email || !password) { setError('Please fill in all fields'); return; }
     if (!isValidEmail(email)) { setError('Please enter a valid email address'); return; }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (isAdminRoleSelected && !isEmailAuthorizedForAdmin) {
+      setError('Only authorized emails can sign in as Administrator. Please contact support.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, role);
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (err) {
       const msg = err.code === 'auth/invalid-credential' ? 'Invalid email or password'
         : err.code === 'auth/too-many-requests' ? 'Too many attempts. Please try again later'
         : err.code === 'auth/user-not-found' ? 'No account found with this email'
+        : err.code === 'auth/unauthorized-admin' ? 'Only authorized emails can sign in as Administrator. Please contact support.'
         : 'Failed to sign in. Please try again.';
       setError(msg);
     } finally {
@@ -46,7 +57,9 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const result = await loginWithGoogle();
+      // Don't pass role to Google auth - it will be determined by whitelist
+      // If user is not authorized for admin, error will be thrown by AuthContext
+      const result = await loginWithGoogle(role);
       if (result?.method === 'popup') {
         toast.success('Signed in successfully!');
         navigate('/dashboard');
@@ -57,6 +70,8 @@ export default function Login() {
       const code = String(err?.code || '').toLowerCase();
       const message = code.includes('popup-blocked')
         ? 'Popup was blocked by browser. Please allow popups and try again.'
+        : code.includes('unauthorized-admin')
+        ? 'Admin access denied: Only authorized emails can sign in as Administrator. Please contact support or try again with a different account.'
         : 'Google sign-in failed. Please try again.';
       setError(message);
     } finally {
@@ -92,6 +107,26 @@ export default function Login() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+              <div>
+                <label htmlFor="login-role" className="block text-sm font-medium text-slate-700 mb-1.5">Sign in as *</label>
+                <div className="relative">
+                  <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <select
+                    id="login-role"
+                    name="role"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="input-field pl-10 capitalize"
+                    disabled={loading}
+                  >
+                    <option value="admin">Administrator</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                </div>
+              </div>
+              
+
+
               <div>
                 <label htmlFor="login-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
                 <div className="relative">

@@ -205,8 +205,6 @@ export default function Settings() {
                   <div>
                     <label htmlFor="settings-role" className="block text-sm font-medium text-slate-700 mb-1.5">Role</label>
                     <select id="settings-role" name="role" value={form.role} onChange={updateField('role')} className="input-field" disabled={!canEditRole}>
-                      <option value="analyst">Analyst</option>
-                      <option value="manager">Manager</option>
                       <option value="admin">Administrator</option>
                       <option value="viewer">Viewer</option>
                     </select>

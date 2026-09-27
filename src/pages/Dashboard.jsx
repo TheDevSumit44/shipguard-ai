@@ -1,15 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, AlertTriangle, TrendingUp, Clock, Shield, Activity,
-  ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Eye,
+  ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Eye, Users, Database,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
-import { motion } from 'framer-motion';
-import { getShipments, getAlerts, getRouteRecommendations, subscribeToShipments, subscribeToAlerts, subscribeToRouteRecommendations, upsertRouteRecommendationForShipment, getDailyShipmentAggregates } from '../services/firestoreService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getShipments, getAlerts, getRouteRecommendations, subscribeToShipments, subscribeToAlerts, subscribeToRouteRecommendations, upsertRouteRecommendationForShipment, getDailyShipmentAggregates, getAllUsers, getUserShipments, getUserLastActive } from '../services/firestoreService';
 import { predictDelay } from '../lib/ml/delayPredictor';
 import { buildRouteIntelligence } from '../services/routeIntelligenceService';
 import toast from 'react-hot-toast';
+import { ChevronUp, ChevronDown, X } from 'lucide-react';
 
 const fadeUp = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4 } };
 
@@ -84,11 +86,15 @@ function hasRouteContext(shipment) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const [shipments, setShipments] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [routeRecommendations, setRouteRecommendations] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [showDataManagement, setShowDataManagement] = useState(false);
+  const [usersWithDetails, setUsersWithDetails] = useState([]);
 
   useEffect(() => {
     async function load() {
@@ -218,6 +224,50 @@ export default function Dashboard() {
     // Fallback to risk-sorted rows if route-ready data is unavailable.
     return (merged.length ? merged : sorted).slice(0, 6);
   }, [shipments, alerts]);
+
+  const loadUserDetails = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const allUsers = await getAllUsers();
+      const detailedUsers = await Promise.all(
+        allUsers.map(async (user) => {
+          const shipmentCount = await getUserShipments(user.id);
+          const lastActive = await getUserLastActive(user.id);
+          return {
+            ...user,
+            shipmentCount,
+            lastActive
+          };
+        })
+      );
+      setUsersWithDetails(detailedUsers.sort((a, b) => b.shipmentCount - a.shipmentCount));
+    } catch (e) {
+      console.error('Failed to load user details:', e);
+      toast.error('Failed to load user data');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  const formatTimeAgo = (date) => {
+    if (!date) return 'Never';
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  const handleDataManagementClick = async () => {
+    if (!showDataManagement) {
+      await loadUserDetails();
+    }
+    setShowDataManagement(!showDataManagement);
+  };
 
   if (loading) {
     return (
@@ -467,6 +517,119 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+        </motion.div>
+      )}
+
+      {/* Admin Controls - Only for admin role */}
+      {userProfile?.role === 'admin' && (
+        <motion.div {...fadeUp} transition={{ delay: 0.4 }} className="stat-card">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800">Admin Controls</h3>
+              <p className="text-sm text-slate-500 mt-1">Data management and administrative operations</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+              <Shield className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <button
+              onClick={() => handleDataManagementClick()}
+              className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <div className="flex items-start justify-between mb-2">
+                <Users className="w-5 h-5 text-slate-400" />
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{usersWithDetails.length || '—'}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Users</p>
+            </button>
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
+              <div className="flex items-start justify-between mb-2">
+                <AlertTriangle className="w-5 h-5 text-slate-400" />
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{alerts.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Alerts</p>
+            </div>
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
+              <div className="flex items-start justify-between mb-2">
+                <Package className="w-5 h-5 text-slate-400" />
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{shipments.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Shipments</p>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-200">
+            <button
+              onClick={handleDataManagementClick}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              <Database className="w-4 h-4" />
+              Data Management
+              {showDataManagement ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Data Management Modal */}
+          <AnimatePresence>
+            {showDataManagement && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="mt-4 overflow-hidden"
+              >
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-slate-700">System Users</h4>
+                    {usersLoading && <div className="text-xs text-slate-500">Loading...</div>}
+                  </div>
+
+                  {usersWithDetails.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 text-sm">
+                      {usersLoading ? 'Fetching user data...' : 'No users found'}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
+                            <th className="px-3 py-2 text-left">Name</th>
+                            <th className="px-3 py-2 text-left">Email</th>
+                            <th className="px-3 py-2 text-left">Role</th>
+                            <th className="px-3 py-2 text-right">Tracking</th>
+                            <th className="px-3 py-2 text-left">Last Active</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {usersWithDetails.map((user, idx) => (
+                            <tr key={user.id || idx} className="border-b border-slate-100 hover:bg-white transition-colors">
+                              <td className="px-3 py-2 text-slate-700 font-medium">{user.displayName || 'Unknown'}</td>
+                              <td className="px-3 py-2 text-slate-600 truncate max-w-[180px]" title={user.email}>
+                                {user.email}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`badge ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  {user.role || 'Viewer'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                                {user.shipmentCount || 0}
+                              </td>
+                              <td className="px-3 py-2 text-xs text-slate-500">
+                                {formatTimeAgo(user.lastActive)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
     </div>

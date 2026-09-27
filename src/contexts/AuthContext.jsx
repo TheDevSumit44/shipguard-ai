@@ -25,6 +25,8 @@ const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const DEFAULT_NOTIFICATIONS = { email: true, push: true, sms: false };
 const DEFAULT_PREFERENCES = { riskThreshold: 60, slaWarningHours: 48, digestTime: '08:00' };
 const DEFAULT_INTEGRATIONS = { weatherApiKey: '', mapsApiKey: '', newsApiKey: '' };
+const ADMIN_EMAIL_WHITELIST = ['shirotprusty4444@gmail.com'];
+const DEFAULT_ROLE = 'viewer';
 
 function isLikelyMobileBrowser() {
   if (typeof navigator === 'undefined') return false;
@@ -93,10 +95,10 @@ export function AuthProvider({ children }) {
     const snap = await getDoc(ref);
     if (!snap.exists()) {
       await setDoc(ref, {
-        displayName: user.displayName || extra.displayName || '',
+        displayName: user.displayName || '',
         email: user.email,
         photoURL: user.photoURL || null,
-        role: 'analyst',
+        role: extra.role || 'viewer',
         company: extra.company || '',
         notifications: DEFAULT_NOTIFICATIONS,
         preferences: DEFAULT_PREFERENCES,
@@ -120,42 +122,100 @@ export function AuthProvider({ children }) {
     setUserProfile({ id: updated.id, ...updated.data() });
   }
 
-  async function signup(email, password, displayName, company) {
+  async function signup(email, password, displayName, company, role) {
     setAuthError('');
     sessionStorage.setItem(AUTH_SESSION_FLAG, '1');
+    
+    // Validate admin role restriction
+    if (role === 'admin' && !ADMIN_EMAIL_WHITELIST.includes(email)) {
+      sessionStorage.removeItem(AUTH_SESSION_FLAG);
+      const err = new Error('Only authorized emails can register as Administrator. Please contact support.');
+      err.code = 'auth/unauthorized-admin';
+      setAuthError(err.message);
+      throw err;
+    }
+    
+    // Auto-assign viewer role if not admin
+    const finalRole = (role === 'admin' && ADMIN_EMAIL_WHITELIST.includes(email)) ? 'admin' : DEFAULT_ROLE;
+    
+    if (finalRole) {
+      sessionStorage.setItem('shipguard_pending_role', finalRole);
+    }
     markActivity();
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName });
-      await createUserDoc(cred.user, { displayName, company });
+      await createUserDoc(cred.user, { displayName, company, role: finalRole });
       return cred;
     } catch (e) {
       setAuthError(formatAuthError(e, 'Failed to create account. Please try again.'));
       sessionStorage.removeItem(AUTH_SESSION_FLAG);
+      sessionStorage.removeItem('shipguard_pending_role');
       throw e;
     }
   }
 
-  async function login(email, password) {
+  async function login(email, password, role) {
     setAuthError('');
     sessionStorage.setItem(AUTH_SESSION_FLAG, '1');
+    
+    // Validate admin role restriction
+    if (role === 'admin' && !ADMIN_EMAIL_WHITELIST.includes(email)) {
+      sessionStorage.removeItem(AUTH_SESSION_FLAG);
+      const err = new Error('Only authorized emails can sign in as Administrator. Please contact support.');
+      err.code = 'auth/unauthorized-admin';
+      setAuthError(err.message);
+      throw err;
+    }
+    
+    if (role) {
+      sessionStorage.setItem('shipguard_pending_role', role);
+    }
     markActivity();
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      await createUserDoc(cred.user);
+      const ref = doc(db, 'users', cred.user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const registeredRole = snap.data()?.role || DEFAULT_ROLE;
+        if (role && registeredRole !== role) {
+          await signOut(auth);
+          sessionStorage.removeItem(AUTH_SESSION_FLAG);
+          sessionStorage.removeItem('shipguard_pending_role');
+          const err = new Error(`Access denied: Your account is registered as ${registeredRole}, but you selected ${role}.`);
+          err.code = 'auth/role-mismatch';
+          throw err;
+        }
+      } else {
+        await createUserDoc(cred.user, { role: DEFAULT_ROLE });
+      }
       return cred;
     } catch (e) {
-      setAuthError(formatAuthError(e, 'Failed to sign in. Please try again.'));
+      if (e.code === 'auth/role-mismatch') {
+        setAuthError(e.message);
+      } else if (e.code === 'auth/unauthorized-admin') {
+        setAuthError(e.message);
+      } else {
+        setAuthError(formatAuthError(e, 'Failed to sign in. Please try again.'));
+      }
       sessionStorage.removeItem(AUTH_SESSION_FLAG);
+      sessionStorage.removeItem('shipguard_pending_role');
       throw e;
     }
   }
 
-  async function loginWithGoogle() {
+  async function loginWithGoogle(role) {
     setAuthError('');
     sessionStorage.setItem(AUTH_SESSION_FLAG, '1');
     localStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
     localStorage.setItem(AUTH_REDIRECT_PENDING_AT_KEY, String(Date.now()));
+    
+    // SECURITY: role parameter is IGNORED for Google OAuth
+    // Role is ALWAYS determined by whitelist check below
+    // This prevents users from bypassing the admin whitelist via OAuth
+    if (role) {
+      sessionStorage.setItem('shipguard_pending_role', role);
+    }
     markActivity();
 
     const useRedirectFlow = false;
@@ -165,28 +225,56 @@ export function AuthProvider({ children }) {
         const cred = await signInWithPopup(auth, googleProvider);
         localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
         localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
-        await createUserDoc(cred.user);
+        
+        // SECURITY: Check if user requested admin role but is not whitelisted
+        if (role === 'admin' && !ADMIN_EMAIL_WHITELIST.includes(cred.user.email)) {
+          await signOut(auth);
+          sessionStorage.removeItem(AUTH_SESSION_FLAG);
+          sessionStorage.removeItem('shipguard_pending_role');
+          const err = new Error('Admin access denied: Only authorized emails can sign in as Administrator. Please try again with a different account or contact support.');
+          err.code = 'auth/unauthorized-admin';
+          throw err;
+        }
+        
+        // SECURITY: Role determination is WHITELIST-BASED, not user-selected
+        // Only emails in ADMIN_EMAIL_WHITELIST can be admin
+        // All other emails are automatically assigned 'viewer' role
+        const finalRole = ADMIN_EMAIL_WHITELIST.includes(cred.user.email) ? 'admin' : DEFAULT_ROLE;
+        
+        const ref = doc(db, 'users', cred.user.uid);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          // User exists - ensure their role is correct based on whitelist
+          const registeredRole = snap.data()?.role || DEFAULT_ROLE;
+          // Always enforce whitelist, regardless of what role they selected
+          if (registeredRole !== finalRole) {
+            // Update their role to match whitelist
+            await updateDoc(ref, { 
+              role: finalRole,
+              updatedAt: serverTimestamp()
+            });
+          }
+        } else {
+          // New user - create with correct role based on whitelist
+          await createUserDoc(cred.user, { role: finalRole });
+        }
+
         return { method: 'popup', user: cred.user };
       }
 
       await signInWithRedirect(auth, googleProvider);
       return { method: 'redirect' };
     } catch (e) {
-      const code = String(e?.code || '').toLowerCase();
-      const shouldFallbackToRedirect =
-        !useRedirectFlow &&
-        (code.includes('popup-blocked') ||
-          code.includes('popup-closed-by-user') ||
-          code.includes('cancelled-popup-request') ||
-          code.includes('operation-not-supported'));
-
-      if (shouldFallbackToRedirect) {
-        await signInWithRedirect(auth, googleProvider);
-        return { method: 'redirect' };
+      if (e.code === 'auth/role-mismatch') {
+        setAuthError(e.message);
+      } else if (e.code === 'auth/unauthorized-admin') {
+        setAuthError(e.message);
+      } else {
+        setAuthError(formatAuthError(e, 'Google sign-in failed. Please try again.'));
       }
-
-      setAuthError(formatAuthError(e, 'Google sign-in failed. Please try again.'));
       sessionStorage.removeItem(AUTH_SESSION_FLAG);
+      sessionStorage.removeItem('shipguard_pending_role');
+      sessionStorage.removeItem('shipguard_pending_admin_role');
       localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
       localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
       throw e;
@@ -245,19 +333,51 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        setCurrentUser(user);
         if (user) {
-          setAuthError('');
-          // Always trust Firebase auth state for authenticated users.
-          // Session storage can be dropped across redirects in some browsers.
-          sessionStorage.setItem(AUTH_SESSION_FLAG, '1');
-          if (redirectPending) {
-            localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-            localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
-          }
-          markActivity();
           try {
-            await createUserDoc(user);
+            const ref = doc(db, 'users', user.uid);
+            const snap = await getDoc(ref);
+            const pendingRole = sessionStorage.getItem('shipguard_pending_role');
+
+            if (snap.exists()) {
+              const registeredRole = snap.data()?.role || 'viewer';
+              if (pendingRole && registeredRole !== pendingRole) {
+                await signOut(auth);
+                sessionStorage.removeItem(AUTH_SESSION_FLAG);
+                sessionStorage.removeItem('shipguard_pending_role');
+                setCurrentUser(null);
+                setUserProfile(null);
+                setAuthError(`Access denied: Your account is registered as ${registeredRole}, but you selected ${pendingRole}.`);
+                setLoading(false);
+                return;
+              }
+            } else {
+              const roleToSet = pendingRole || DEFAULT_ROLE;
+              await setDoc(ref, {
+                displayName: user.displayName || '',
+                email: user.email,
+                photoURL: user.photoURL || null,
+                role: roleToSet,
+                company: '',
+                notifications: DEFAULT_NOTIFICATIONS,
+                preferences: DEFAULT_PREFERENCES,
+                integrations: DEFAULT_INTEGRATIONS,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+
+            setAuthError('');
+            sessionStorage.setItem(AUTH_SESSION_FLAG, '1');
+            if (redirectPending) {
+              localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+              localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
+            }
+            markActivity();
+
+            await createUserDoc(user, pendingRole ? { role: pendingRole } : {});
+            setCurrentUser(user);
+            sessionStorage.removeItem('shipguard_pending_role');
           } catch (e) {
             if (isFirestoreOfflineError(e)) {
               setUserProfile((prev) =>
@@ -266,16 +386,20 @@ export function AuthProvider({ children }) {
                   displayName: user.displayName || '',
                   email: user.email || '',
                   photoURL: user.photoURL || null,
-                  role: 'analyst',
+                  role: DEFAULT_ROLE,
                   company: '',
                   notifications: DEFAULT_NOTIFICATIONS,
                   preferences: DEFAULT_PREFERENCES,
                   integrations: DEFAULT_INTEGRATIONS,
                 }
               );
+              setCurrentUser(user);
               console.warn('Firestore is offline; using temporary profile until reconnection.');
             } else {
               console.error('Failed to load user profile:', e);
+              await signOut(auth);
+              setCurrentUser(null);
+              setUserProfile(null);
             }
           }
         } else {
@@ -283,6 +407,7 @@ export function AuthProvider({ children }) {
             localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
             localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
           }
+          setCurrentUser(null);
           setUserProfile(null);
         }
         setLoading(false);
