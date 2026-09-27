@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Package, Search, Filter, ChevronDown, ChevronUp,
-  Plane, Ship, Truck, Train, Shuffle, Eye, MapPin, Clock, AlertTriangle,
+  Plane, Ship, Truck, Train, Shuffle, Eye, MapPin, Clock, AlertTriangle, Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getShipments, subscribeToShipments } from '../services/firestoreService';
+import { getShipments, subscribeToShipments, deleteShipment } from '../services/firestoreService';
+import { useAuth } from '../contexts/AuthContext';
 import { predictDelay } from '../lib/ml/delayPredictor';
 import toast from 'react-hot-toast';
 
@@ -27,6 +28,7 @@ function decorateShipments(shipments) {
 
 export default function Shipments() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const [searchParams] = useSearchParams();
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +104,17 @@ export default function Shipments() {
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortBy(field); setSortDir('desc'); }
+  };
+
+  const handleDeleteShipment = async (shipmentId) => {
+    try {
+      await deleteShipment(shipmentId);
+      setShipments(prev => prev.filter(s => s.id !== shipmentId));
+      toast.success('Shipment deleted');
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast.error('Failed to delete shipment');
+    }
   };
 
   const statusColors = {
@@ -227,11 +240,14 @@ export default function Shipments() {
               {paginated.map((s, i) => {
                 const ModeIcon = modeIcons[s.mode] || Package;
                 return (
-                  <button
+                  <div
                     key={s.trackingId || i}
-                    onClick={() => navigate(`/shipments/${s.id || s.trackingId}`)}
-                    className="w-full text-left p-4 hover:bg-slate-50 transition-colors"
+                    className="w-full text-left p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
                   >
+                    <button
+                      onClick={() => navigate(`/shipments/${s.id || s.trackingId}`)}
+                      className="w-full text-left block"
+                    >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-700 font-mono truncate">{s.trackingId}</p>
@@ -274,7 +290,20 @@ export default function Shipments() {
                         </p>
                       )}
                     </div>
-                  </button>
+                    </button>
+                    {userProfile?.role === 'admin' && (
+                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteShipment(s.id); }}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors flex items-center gap-1"
+                          title="Delete shipment (Admin only)"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -366,9 +395,20 @@ export default function Shipments() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <button className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors">
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors" title="View details">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {userProfile?.role === 'admin' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteShipment(s.id); }}
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                                title="Delete shipment (Admin only)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

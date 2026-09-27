@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, AlertCircle, UserCheck, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const ADMIN_EMAIL_WHITELIST = ['shirotprusty4444@gmail.com'];
 
 export default function Register() {
   const { signup, loginWithGoogle, currentUser, authError, clearAuthError } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', company: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ name: '', company: '', email: '', password: '', confirmPassword: '', role: 'viewer' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,6 +17,9 @@ export default function Register() {
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
   const isStrongPassword = (value) => /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(String(value || ''));
+  
+  const isAdminRoleSelected = form.role === 'admin';
+  const isEmailAuthorizedForAdmin = form.email && ADMIN_EMAIL_WHITELIST.includes(form.email.trim());
 
   if (currentUser) return <Navigate to="/dashboard" replace />;
 
@@ -30,15 +35,22 @@ export default function Register() {
     if (company && company.trim().length > 80) { setError('Company name is too long'); return; }
     if (!isStrongPassword(password)) { setError('Password must be at least 8 chars and include letters and numbers'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    if (isAdminRoleSelected && !isEmailAuthorizedForAdmin) {
+      setError('Only authorized emails can register as Administrator. Please contact support.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      await signup(email, password, name, company);
+      // For email/password signup, validate admin role and use user-selected role
+      // (Authentication middleware will enforce whitelist)
+      await signup(email, password, name, company, form.role);
       toast.success('Account created successfully!');
       navigate('/dashboard');
     } catch (err) {
       const msg = err.code === 'auth/email-already-in-use' ? 'An account with this email already exists'
         : err.code === 'auth/weak-password' ? 'Password is too weak. Use at least 6 characters'
+        : err.code === 'auth/unauthorized-admin' ? 'Only authorized emails can register as Administrator. Please contact support.'
         : 'Failed to create account. Please try again.';
       setError(msg);
     } finally {
@@ -51,7 +63,9 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      const result = await loginWithGoogle();
+      // Don't pass role to Google auth - it will be determined by whitelist
+      // If user is not authorized for admin, error will be thrown by AuthContext
+      const result = await loginWithGoogle(form.role);
       if (result?.method === 'popup') {
         toast.success('Signed in successfully!');
         navigate('/dashboard');
@@ -62,7 +76,9 @@ export default function Register() {
       const code = String(err?.code || '').toLowerCase();
       const message = code.includes('popup-blocked')
         ? 'Popup was blocked by browser. Please allow popups and try again.'
-        : 'Google sign-up failed.';
+        : code.includes('unauthorized-admin')
+        ? 'Admin access denied: Only authorized emails can register as Administrator. Please contact support or try again with a different account.'
+        : 'Google sign-up failed. Please try again.';
       setError(message);
     } finally {
       setLoading(false);
@@ -97,7 +113,26 @@ export default function Register() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="register-role" className="block text-sm font-medium text-slate-700 mb-1.5">Sign up as *</label>
+                <div className="relative">
+                  <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <select
+                    id="register-role"
+                    name="role"
+                    value={form.role}
+                    onChange={updateField('role')}
+                    className="input-field pl-10 capitalize"
+                    disabled={loading}
+                  >
+                    <option value="admin">Administrator</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                </div>
+              </div>
+              
+
+              <div className="grid sm:grid-cols-2 gap-4" style={{ marginTop: '-1rem' }}>
                 <div>
                   <label htmlFor="register-name" className="block text-sm font-medium text-slate-700 mb-1.5">Full Name *</label>
                   <div className="relative">
@@ -133,6 +168,31 @@ export default function Register() {
                   </div>
                 </div>
               </div>
+
+              <div>
+                <label htmlFor="register-role" className="block text-sm font-medium text-slate-700 mb-1.5">Select Role *</label>
+                <div className="relative">
+                  <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <select
+                    id="register-role"
+                    name="role"
+                    value={form.role}
+                    onChange={updateField('role')}
+                    className="input-field pl-10 capitalize"
+                    disabled={loading}
+                  >
+                    <option value="admin">Administrator</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                </div>
+              </div>
+              
+              {isAdminRoleSelected && !isEmailAuthorizedForAdmin && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-700">Only authorized emails can register as Administrator.</p>
+                </div>
+              )}
 
               <div>
                 <label htmlFor="register-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email *</label>

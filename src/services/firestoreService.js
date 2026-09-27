@@ -316,6 +316,10 @@ export async function resolveAlert(id, resolution) {
   });
 }
 
+export async function deleteAlert(id) {
+  return deleteDoc(doc(db, 'alerts', id));
+}
+
 export function subscribeToAlerts(callback, filters = {}) {
   let q = collection(db, 'alerts');
   const constraints = [];
@@ -541,4 +545,48 @@ export async function seedAlerts(alerts) {
     batch.set(ref, { ...a, createdAt: serverTimestamp() });
   });
   await batch.commit();
+}
+
+// ─── Admin Helper Functions ───
+export async function getAllUsers() {
+  try {
+    const usersRef = collection(db, 'users');
+    const snap = await getDocs(usersRef);
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error('Failed to fetch users:', e);
+    return [];
+  }
+}
+
+export async function getUserShipments(userId) {
+  try {
+    const constraints = [
+      where('ownerId', '==', userId)
+    ];
+    const qRef = query(collection(db, 'shipments'), ...constraints);
+    const snap = await getDocs(qRef);
+    return snap.docs.length;
+  } catch (e) {
+    console.error('Failed to fetch user shipments:', e);
+    return 0;
+  }
+}
+
+export async function getUserLastActive(userId) {
+  try {
+    const ref = doc(db, 'users', userId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    
+    const data = snap.data();
+    const lastActivity = data?.lastActive || data?.updatedAt || null;
+    return toJsDate(lastActivity);
+  } catch (e) {
+    console.error('Failed to fetch user last active:', e);
+    return null;
+  }
 }

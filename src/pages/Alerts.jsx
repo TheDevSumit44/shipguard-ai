@@ -2,14 +2,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, BellOff, CheckCircle2, Clock, Filter,
-  ChevronDown, ChevronUp, Search, Shield, X, Eye, ExternalLink,
+  ChevronDown, ChevronUp, Search, Shield, X, Eye, ExternalLink, Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAlerts, subscribeToAlerts, acknowledgeAlert, resolveAlert } from '../services/firestoreService';
+import { getAlerts, subscribeToAlerts, acknowledgeAlert, resolveAlert, deleteAlert } from '../services/firestoreService';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function Alerts() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -86,6 +88,17 @@ export default function Alerts() {
     } catch (e) {
       console.error('Resolve failed:', e);
       toast.error('Failed to resolve alert');
+    }
+  };
+
+  const handleDelete = async (alertId) => {
+    try {
+      await deleteAlert(alertId);
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+      toast.success('Alert deleted');
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast.error('Failed to delete alert');
     }
   };
 
@@ -294,24 +307,34 @@ export default function Alerts() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto mt-3 sm:mt-0">
-                        {isActive && (
+                      {userProfile?.role === 'admin' && (
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto mt-3 sm:mt-0">
+                          {isActive && (
+                            <button
+                              onClick={() => handleAcknowledge(alert.id)}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex-1 sm:flex-none"
+                            >
+                              Acknowledge
+                            </button>
+                          )}
+                          {(isActive || isAcknowledged) && (
+                            <button
+                              onClick={() => handleResolve(alert.id)}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors flex-1 sm:flex-none"
+                            >
+                              Resolve
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleAcknowledge(alert.id)}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex-1 sm:flex-none"
+                            onClick={() => handleDelete(alert.id)}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors flex-1 sm:flex-none flex items-center justify-center gap-1"
+                            title="Delete alert (Admin only)"
                           >
-                            Acknowledge
+                            <Trash2 className="w-3 h-3" />
+                            Delete
                           </button>
-                        )}
-                        {(isActive || isAcknowledged) && (
-                          <button
-                            onClick={() => handleResolve(alert.id)}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors flex-1 sm:flex-none"
-                          >
-                            Resolve
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
