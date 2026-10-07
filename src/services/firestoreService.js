@@ -590,3 +590,71 @@ export async function getUserLastActive(userId) {
     return null;
   }
 }
+
+// ──────────────────────────────────────────────────────
+// Incident Notes Functions - Viewer incident reporting
+// ──────────────────────────────────────────────────────
+
+export async function addIncidentNote(shipmentId, noteData) {
+  try {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
+    
+    const response = await fetch(`${backendUrl}/api/shipments/${shipmentId}/notes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(noteData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to add incident note: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (e) {
+    console.error('Failed to add incident note:', e);
+    throw e;
+  }
+}
+
+export async function getShipmentNotes(shipmentId) {
+  try {
+    const notesRef = collection(db, 'shipments', shipmentId, 'notes');
+    const q = query(notesRef, orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    
+    return snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (e) {
+    console.error('Failed to fetch shipment notes:', e);
+    return [];
+  }
+}
+
+export function subscribeToShipmentNotes(shipmentId, callback) {
+  try {
+    const notesRef = collection(db, 'shipments', shipmentId, 'notes');
+    const q = query(notesRef, orderBy('createdAt', 'desc'));
+    
+    const unsub = onSnapshot(q, (snap) => {
+      const notes = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      callback(notes);
+    }, (error) => {
+      console.error('Failed to subscribe to shipment notes:', error);
+      callback([]);
+    });
+
+    return unsub;
+  } catch (e) {
+    console.error('Failed to set up notes subscription:', e);
+    return () => {};
+  }
+}
