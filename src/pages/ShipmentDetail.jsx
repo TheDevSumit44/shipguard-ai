@@ -6,7 +6,7 @@ import {
   ChevronRight, Zap, Route, Phone, Bell, GitBranch, FileCheck, Activity, ExternalLink,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getShipmentById, upsertRouteRecommendationForShipment, getShipmentNotes, subscribeToShipmentNotes } from '../services/firestoreService';
+import { getShipmentById, upsertRouteRecommendationForShipment, getShipmentNotes, subscribeToShipmentNotes, subscribeToShipmentById } from '../services/firestoreService';
 import { useAuth } from '../contexts/AuthContext';
 import IncidentReportModal from '../components/IncidentReportModal';
 import IncidentNotesTimeline from '../components/IncidentNotesTimeline';
@@ -85,6 +85,24 @@ export default function ShipmentDetail() {
       }
     }
     load();
+
+    // Set up real-time subscription to shipment updates
+    const unsub = subscribeToShipmentById(id, (updatedShipment) => {
+      if (updatedShipment) {
+        const pred = predictDelay(updatedShipment);
+        updatedShipment.riskScore = pred.riskScore;
+        updatedShipment.riskLevel = pred.riskLevel;
+        updatedShipment.riskColor = pred.riskColor;
+        updatedShipment.estimatedDelay = pred.estimatedDelay;
+        setShipment(updatedShipment);
+        setPrediction(pred);
+        setRecommendations(getRecommendations(pred, updatedShipment));
+      }
+    });
+
+    return () => {
+      unsub();
+    };
   }, [id]);
 
   useEffect(() => {

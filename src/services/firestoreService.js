@@ -658,3 +658,30 @@ export function subscribeToShipmentNotes(shipmentId, callback) {
     return () => {};
   }
 }
+
+// ──────────────────────────────────────────────────────
+// Real-time subscription to a single shipment by ID
+// ──────────────────────────────────────────────────────
+
+export function subscribeToShipmentById(shipmentId, callback) {
+  try {
+    const shipmentRef = doc(db, 'shipments', shipmentId);
+    
+    const unsub = onSnapshot(shipmentRef, (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.data());
+      } else {
+        console.warn('Shipment not found:', shipmentId);
+        callback(null);
+      }
+    }, (error) => {
+      console.error('Failed to subscribe to shipment:', error);
+      callback(null);
+    });
+
+    return unsub;
+  } catch (e) {
+    console.error('Failed to set up shipment subscription:', e);
+    return () => {};
+  }
+}
