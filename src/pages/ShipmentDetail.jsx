@@ -10,6 +10,7 @@ import { getShipmentById, upsertRouteRecommendationForShipment, getShipmentNotes
 import { useAuth } from '../contexts/AuthContext';
 import IncidentReportModal from '../components/IncidentReportModal';
 import IncidentNotesTimeline from '../components/IncidentNotesTimeline';
+import AdminIncidentDetailsModal from '../components/AdminIncidentDetailsModal';
 import { predictDelay } from '../lib/ml/delayPredictor';
 import { getRecommendations, getUrgencyLabel } from '../lib/ml/recommendationEngine';
 import { getWeatherByCity } from '../lib/api/weatherApi';
@@ -38,6 +39,8 @@ export default function ShipmentDetail() {
   const [showIncidentModal, setShowIncidentModal] = useState(false);
   const [notes, setNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [showAdminDetailsModal, setShowAdminDetailsModal] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -669,11 +672,35 @@ export default function ShipmentDetail() {
 
       </div>
 
+      {/* Incident Report Modal */}
+      <IncidentReportModal
+        isOpen={showIncidentModal}
+        onClose={() => setShowIncidentModal(false)}
+        shipmentId={id}
+        trackingId={shipment?.trackingId}
+      />
+
+      {/* Admin Incident Details Modal */}
+      <AdminIncidentDetailsModal
+        isOpen={showAdminDetailsModal}
+        onClose={() => {
+          setShowAdminDetailsModal(false);
+          setSelectedIncident(null);
+        }}
+        incidentNote={selectedIncident}
+        shipmentId={id}
+      />
+
       {/* Incident Notes Timeline */}
       <IncidentNotesTimeline
         notes={notes}
         loading={notesLoading}
         showHeader={true}
+        shipmentId={id}
+        onAdminViewDetails={(note) => {
+          setSelectedIncident(note);
+          setShowAdminDetailsModal(true);
+        }}
       />
     </div>
   );

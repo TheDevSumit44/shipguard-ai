@@ -24,8 +24,9 @@ const SEVERITY_LEVELS = [
   { value: 'critical', label: 'Critical', color: 'bg-red-100 text-red-700 border-red-300' },
 ];
 
-export default function IncidentReportModal({ isOpen, onClose, shipmentId, trackingId }) {
+export default function IncidentReportModal({ isOpen, onClose, shipmentId, trackingId, fromNotification = false }) {
   const [formData, setFormData] = useState({
+    shipmentId: shipmentId || '',
     incidentType: '',
     severity: '',
     text: '',
@@ -58,6 +59,9 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
   const validateForm = () => {
     const newErrors = {};
 
+    if (!formData.shipmentId) {
+      newErrors.shipmentId = 'Shipment ID is required';
+    }
     if (!formData.incidentType) {
       newErrors.incidentType = 'Incident type is required';
     }
@@ -105,10 +109,11 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
         estimatedDelay: formData.estimatedDelay ? parseInt(formData.estimatedDelay) : undefined
       };
 
-      await addIncidentNote(shipmentId, noteData);
+      await addIncidentNote(formData.shipmentId, noteData);
 
       toast.success('Incident report submitted successfully');
       setFormData({
+        shipmentId: shipmentId || '',
         incidentType: '',
         severity: '',
         text: '',
@@ -167,6 +172,29 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                {/* Shipment ID - only show if not passed as prop */}
+                {!shipmentId && (
+                  <div>
+                    <label htmlFor="shipmentId" className="block text-sm font-semibold text-slate-700 mb-2">
+                      Shipment ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="shipmentId"
+                      name="shipmentId"
+                      type="text"
+                      value={formData.shipmentId}
+                      onChange={handleInputChange}
+                      placeholder="Enter shipment ID or tracking number..."
+                      className={`w-full px-4 py-2.5 rounded-lg border ${
+                        errors.shipmentId ? 'border-red-300' : 'border-slate-200'
+                      } bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all`}
+                    />
+                    {errors.shipmentId && (
+                      <p className="mt-1 text-xs text-red-600">{errors.shipmentId}</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Incident Type */}
                 <div>
                   <label htmlFor="incidentType" className="block text-sm font-semibold text-slate-700 mb-2">

@@ -1,5 +1,6 @@
-import { AlertTriangle, Clock, MapPin, Clock as ClockIcon } from 'lucide-react';
+import { AlertTriangle, Clock, MapPin, Clock as ClockIcon, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const INCIDENT_LABELS = {
   fuel_shortage: 'Fuel Shortage',
@@ -35,7 +36,8 @@ const SEVERITY_DOT = {
   critical: 'bg-red-500'
 };
 
-export default function IncidentNotesTimeline({ notes = [], loading = false, showHeader = true }) {
+export default function IncidentNotesTimeline({ notes = [], loading = false, showHeader = true, shipmentId = null, onAdminViewDetails = null }) {
+  const { userProfile } = useAuth();
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown date';
     
@@ -129,7 +131,9 @@ export default function IncidentNotesTimeline({ notes = [], loading = false, sho
               </div>
 
               {/* Note Content */}
-              <div className={`flex-1 p-4 rounded-xl border ${severityColor}`}>
+              <div className={`flex-1 p-4 rounded-xl border ${severityColor} ${userProfile?.role === 'admin' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+                onClick={() => userProfile?.role === 'admin' && onAdminViewDetails && onAdminViewDetails(note)}
+              >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex-1 min-w-0">
@@ -177,10 +181,19 @@ export default function IncidentNotesTimeline({ notes = [], loading = false, sho
                 </div>
 
                 {/* Footer */}
-                <div className="mt-3 pt-3 border-t border-slate-300 border-opacity-30">
+                <div className="mt-3 pt-3 border-t border-slate-300 border-opacity-30 flex items-center justify-between">
                   <p className="text-xs text-slate-600">
                     Reported by: <span className="font-medium text-slate-700">{note.createdBy || 'Unknown'}</span>
                   </p>
+                  {userProfile?.role === 'admin' && (
+                    <button
+                      onClick={() => onAdminViewDetails && onAdminViewDetails(note)}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      View Details
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

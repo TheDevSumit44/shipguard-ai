@@ -1190,7 +1190,7 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
     const shipmentRef = db.collection('shipments').doc(id);
     const shipmentSnap = await shipmentRef.get();
 
-    if (!shipmentSnap.exists()) {
+    if (!shipmentSnap.exists) {
       res.status(404).json({ error: 'Shipment not found' });
       return;
     }
