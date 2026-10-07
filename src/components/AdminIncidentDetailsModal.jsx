@@ -33,6 +33,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
 
   const [updateFormData, setUpdateFormData] = useState({
     status: '',
+    riskLevel: '',
     estimatedDelay: '',
     location: '',
     notes: ''
@@ -54,6 +55,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
         setShipment(data);
         setUpdateFormData({
           status: data.status || '',
+          riskLevel: data.riskLevel || '',
           estimatedDelay: data.estimatedDelay || '',
           location: `${data.currentLocation?.lat || ''}, ${data.currentLocation?.lng || ''}`,
           notes: data.adminNotes || ''
@@ -76,10 +78,12 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
     try {
       const updateData = {
         status: updateFormData.status || shipment.status,
+        riskLevel: updateFormData.riskLevel || shipment.riskLevel,
         estimatedDelay: updateFormData.estimatedDelay ? parseInt(updateFormData.estimatedDelay) : shipment.estimatedDelay,
         adminNotes: updateFormData.notes,
         lastUpdatedBy: 'admin',
-        lastUpdatedAt: new Date().toISOString()
+        lastUpdatedAt: new Date().toISOString(),
+        incidentResponse: true
       };
 
       await updateShipment(shipmentId, updateData);
@@ -220,8 +224,19 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                             <p className="font-medium capitalize">{shipment.status}</p>
                           </div>
                           <div>
+                            <p className="text-xs text-slate-500 mb-1">Risk Level</p>
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                              shipment.riskLevel === 'critical' ? 'bg-red-100 text-red-700' :
+                              shipment.riskLevel === 'high' ? 'bg-orange-100 text-orange-700' :
+                              shipment.riskLevel === 'medium' ? 'bg-amber-100 text-amber-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {shipment.riskLevel || 'unknown'}
+                            </span>
+                          </div>
+                          <div>
                             <p className="text-xs text-slate-500 mb-1">Risk Score</p>
-                            <p className="font-medium">{shipment.riskScore || 'N/A'}</p>
+                            <p className="font-medium">{shipment.riskScore || 'N/A'}/100</p>
                           </div>
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Current Estimated Delay</p>
@@ -282,6 +297,23 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                           </div>
 
                           <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Risk Level</label>
+                            <select
+                              value={updateFormData.riskLevel}
+                              onChange={(e) => setUpdateFormData({...updateFormData, riskLevel: e.target.value})}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="">Select risk level...</option>
+                              <option value="low">Low Risk</option>
+                              <option value="medium">Medium Risk</option>
+                              <option value="high">High Risk</option>
+                              <option value="critical">Critical Risk</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
                             <label className="block text-xs font-medium text-slate-700 mb-1">Est. Delay (hours)</label>
                             <input
                               type="number"
@@ -293,6 +325,16 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                               placeholder="0"
                             />
                           </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Current Location</label>
+                            <input
+                              type="text"
+                              value={updateFormData.location}
+                              onChange={(e) => setUpdateFormData({...updateFormData, location: e.target.value})}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="lat, lng"
+                            />
+                          </div>
                         </div>
 
                         <div>
@@ -300,8 +342,8 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                           <textarea
                             value={updateFormData.notes}
                             onChange={(e) => setUpdateFormData({...updateFormData, notes: e.target.value})}
-                            placeholder="Document what actions were taken..."
-                            rows={3}
+                            placeholder="Document what actions were taken, incident response, follow-up actions..."
+                            rows={4}
                             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                           />
                         </div>
