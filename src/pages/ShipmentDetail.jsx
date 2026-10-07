@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Package, MapPin, Clock, Truck, Plane, Ship, Train, Shuffle,
   Cloud, Wind, Eye, Thermometer, AlertTriangle, CheckCircle2, Circle,
