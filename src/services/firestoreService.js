@@ -784,16 +784,20 @@ export async function deleteIncidentNote(shipmentId, noteId) {
     await deleteDoc(noteRef);
     console.log(`Successfully deleted incident note ${noteId}`);
     
-    // Cascade delete associated alerts linked by both shipmentId AND noteId
+    // Cascade delete associated alerts linked by shipmentId only
+    // (We'll filter by noteId in-memory since composite indexes might not be set up)
     const alertsSnap = await getDocs(
       query(collection(db, 'alerts'), 
-        where('shipmentId', '==', shipmentId),
-        where('noteId', '==', noteId)
+        where('shipmentId', '==', shipmentId)
       )
     );
-    console.log(`Found ${alertsSnap.docs.length} alerts to cascade delete`);
+    console.log(`Found ${alertsSnap.docs.length} total alerts for shipment, filtering by noteId...`);
     
-    const deleteAlertPromises = alertsSnap.docs.map(alertDoc => deleteDoc(alertDoc.ref));
+    // Filter alerts by noteId in JavaScript (since composite index might not exist)
+    const alertsToDelete = alertsSnap.docs.filter(doc => doc.data().noteId === noteId);
+    console.log(`Filtered to ${alertsToDelete.length} alerts with matching noteId`);
+    
+    const deleteAlertPromises = alertsToDelete.map(alertDoc => deleteDoc(alertDoc.ref));
     await Promise.all(deleteAlertPromises);
     
     console.log(`Successfully deleted incident note ${noteId} and ${deleteAlertPromises.length} associated alerts`);
