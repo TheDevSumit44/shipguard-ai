@@ -23,8 +23,6 @@ export default function ViewerMessageModal({ isOpen, onClose, shipmentId, viewer
         where('type', '==', 'admin_message')
       );
       
-      console.log('ViewerMessageModal: Setting up subscription', { isAdmin, shipmentId, viewerEmail });
-      
       // Real-time listener
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({
@@ -32,22 +30,19 @@ export default function ViewerMessageModal({ isOpen, onClose, shipmentId, viewer
           ...doc.data()
         }));
         
-        console.log('ViewerMessageModal: Received messages:', msgs.length, msgs);
         setMessages(msgs);
         setLoading(false);
       }, (error) => {
-        console.error('ViewerMessageModal: Failed to load messages:', error);
-        console.error('Error code:', error.code, 'Message:', error.message);
+        console.error('Failed to load messages');
         setMessages([]);
         setLoading(false);
       });
 
       return () => {
-        console.log('ViewerMessageModal: Cleaning up subscription');
         unsubscribe();
       };
     } catch (error) {
-      console.error('ViewerMessageModal: Error setting up subscription:', error);
+      console.error('Error setting up subscription');
       setLoading(false);
     }
   }, [isOpen, shipmentId, viewerEmail, isAdmin]);

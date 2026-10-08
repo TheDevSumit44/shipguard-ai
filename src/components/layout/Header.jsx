@@ -59,7 +59,11 @@ export default function Header({ onMenuClick }) {
         >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0">
             {currentUser?.photoURL ? (
-              <img src={currentUser.photoURL} alt="" className="w-8 h-8 rounded-lg object-cover" />
+              <img 
+                src={currentUser.photoURL} 
+                alt="" 
+                className="w-8 h-8 rounded-lg object-cover" 
+              />
             ) : (
               <User className="w-4 h-4 text-white" />
             )}

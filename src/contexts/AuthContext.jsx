@@ -35,7 +35,7 @@ const DEFAULT_ROLE = 'viewer';
 if (ADMIN_EMAIL_WHITELIST.length === 0) {
   console.warn('[Auth] VITE_ADMIN_EMAILS is empty or not configured. No admin users will be available.');
 } else {
-  console.log(`[Auth] Admin whitelist configured with ${ADMIN_EMAIL_WHITELIST.length} email(s): ${ADMIN_EMAIL_WHITELIST.join(', ')}`);
+  // Admin whitelist configured - do not log emails for security
 }
 
 function isLikelyMobileBrowser() {
@@ -107,7 +107,8 @@ export function AuthProvider({ children }) {
       await setDoc(ref, {
         displayName: user.displayName || '',
         email: user.email,
-        photoURL: user.photoURL || null,
+        // NOTE: photoURL is NOT stored - it's always fetched fresh from Firebase currentUser
+        // This prevents expired Google profile picture URLs from being cached in Firestore
         role: extra.role || 'viewer',
         company: extra.company || '',
         notifications: DEFAULT_NOTIFICATIONS,
@@ -131,7 +132,8 @@ export function AuthProvider({ children }) {
       await updateDoc(ref, patch);
     }
     const updated = await getDoc(ref);
-    setUserProfile({ id: updated.id, ...updated.data() });
+    // Include photoURL from current Firebase user (never from Firestore)
+    setUserProfile({ id: updated.id, ...updated.data(), photoURL: user.photoURL || null });
   }
 
   async function signup(email, password, displayName, company, role) {
@@ -365,7 +367,7 @@ export function AuthProvider({ children }) {
               await setDoc(ref, {
                 displayName: user.displayName || '',
                 email: user.email,
-                photoURL: user.photoURL || null,
+                // NOTE: photoURL is NOT stored - it's always fetched fresh from Firebase currentUser
                 role: roleToSet,
                 company: '',
                 notifications: DEFAULT_NOTIFICATIONS,

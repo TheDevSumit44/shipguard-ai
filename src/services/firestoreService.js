@@ -803,8 +803,15 @@ export function subscribeToIncidentNotifications(viewerEmail, callback) {
       }));
       callback(notifications);
     }, (error) => {
-      console.error('Failed to subscribe to incident notifications:', error);
-      callback([]);
+      // Check if error is due to missing index
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        console.warn('Firestore composite index not yet created for incident notifications. Create it here: https://console.firebase.google.com/v1/r/project/shipguard-ai-thedevsumit44/firestore/indexes');
+        // Return empty notifications instead of erroring
+        callback([]);
+      } else {
+        console.error('Failed to subscribe to incident notifications:', error);
+        callback([]);
+      }
     });
 
     return unsub;

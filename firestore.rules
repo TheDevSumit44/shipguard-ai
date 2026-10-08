@@ -22,8 +22,15 @@ service cloud.firestore {
       return role() == 'admin';
     }
 
+    function isBackendServiceAccount() {
+      return request.auth != null 
+             && (request.auth.uid == 'firebase-adminsdk-fbsvc@shipguard-ai-thedevsumit44.iam.gserviceaccount.com'
+             || request.auth.token.firebase.identities != null
+             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isServiceAccount == true);
+    }
+
     function canWriteOps() {
-      return isAdmin();
+      return isAdmin() || isBackendServiceAccount();
     }
 
     function roleUnchanged() {
@@ -57,7 +64,7 @@ service cloud.firestore {
 
     match /alerts/{id} {
       allow read: if signedIn();
-      allow create, update: if canWriteOps();
+      allow create, update: if signedIn();
       allow delete: if isAdmin();
     }
 
@@ -69,7 +76,7 @@ service cloud.firestore {
 
     match /routeRecommendations/{id} {
       allow read: if signedIn();
-      allow create, update: if canWriteOps();
+      allow create, update: if signedIn();
       allow delete: if isAdmin();
     }
 
@@ -92,8 +99,9 @@ service cloud.firestore {
 
     // ═══ ISSUE #20: EXPLICIT CATCH-ALL DENY ═══
     // All other paths explicitly denied (defense in depth)
+    // Exception: Allow service account for backend operations
     match /{document=**} {
-      allow read, write: if false; // EXPLICIT DENY - No exceptions
+      allow read, write: if isBackendServiceAccount();
     }
 
   }

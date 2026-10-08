@@ -49,26 +49,20 @@ export default function IncidentNotesTimeline({ notes = [], loading = false, sho
   // Subscribe to incident notifications to track messages
   useEffect(() => {
     if (!currentUser?.email) {
-      console.log('IncidentNotesTimeline: No current user email');
       return;
     }
 
-    console.log('IncidentNotesTimeline: Setting up subscription for', currentUser.email);
-
     const unsub = subscribeToIncidentNotifications(currentUser.email, (notifications) => {
-      console.log('IncidentNotesTimeline: Received notifications:', notifications.length);
       const unread = {};
       const msgs = {};
       
       notifications.forEach(notif => {
-        console.log('Checking notification:', { type: notif.type, shipmentId: notif.shipmentId });
         if (notif.type === 'admin_message' && notif.shipmentId) {
           unread[notif.shipmentId] = !notif.read;
           msgs[notif.shipmentId] = true; // Has messages
         }
       });
       
-      console.log('Updated unread:', unread, 'hasMessages:', msgs);
       setUnreadMessages(unread);
       setHasMessages(msgs);
     });
@@ -84,18 +78,10 @@ export default function IncidentNotesTimeline({ notes = [], loading = false, sho
     }
 
     try {
-      console.log('Delete initiated:', { userRole: userProfile?.role, shipmentId, noteId });
       await deleteIncidentNote(shipmentId, noteId);
       toast.success('Incident report deleted');
     } catch (error) {
-      console.error('Failed to delete note:', error);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        userRole: userProfile?.role,
-        shipmentId,
-        noteId
-      });
+      console.error('Failed to delete incident report')
       
       if (error.code === 'permission-denied') {
         toast.error('Permission denied: You must be an admin to delete incident reports');

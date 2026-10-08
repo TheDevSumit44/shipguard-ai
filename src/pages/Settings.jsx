@@ -122,7 +122,11 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center">
                 {currentUser?.photoURL ? (
-                  <img src={currentUser.photoURL} alt="" className="w-14 h-14 rounded-2xl object-cover" />
+                  <img 
+                    src={currentUser.photoURL} 
+                    alt="" 
+                    className="w-14 h-14 rounded-2xl object-cover" 
+                  />
                 ) : (
                   <User className="w-7 h-7 text-white" />
                 )}

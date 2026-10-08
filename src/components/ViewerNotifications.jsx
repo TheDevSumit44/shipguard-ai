@@ -50,11 +50,9 @@ export default function ViewerNotifications() {
 
   useEffect(() => {
     if (!currentUser?.email) {
-      console.log('ViewerNotifications: No currentUser email, skipping subscription');
       return;
     }
 
-    console.log('ViewerNotifications: Setting up subscription for email:', currentUser.email);
     setLoading(true);
 
     try {
@@ -65,9 +63,7 @@ export default function ViewerNotifications() {
       );
 
       const unsub = onSnapshot(q, (snapshot) => {
-        console.log('ViewerNotifications: Received update, count:', snapshot.docs.length);
         const data = snapshot.docs.map(doc => {
-          console.log('Notification:', { id: doc.id, ...doc.data() });
           return {
             id: doc.id,
             ...doc.data()
@@ -76,16 +72,14 @@ export default function ViewerNotifications() {
         setNotifications(data);
         setLoading(false);
       }, (error) => {
-        console.error('ViewerNotifications: Failed to load notifications:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
+        console.error('Failed to load notifications');
         setNotifications([]);
         setLoading(false);
       });
 
       return () => unsub();
     } catch (error) {
-      console.error('ViewerNotifications: Error setting up notifications:', error);
+      console.error('Error setting up notifications');
       setLoading(false);
     }
   }, [currentUser?.email]);
