@@ -507,6 +507,22 @@ const shipmentSchema = Joi.object({
   source: Joi.string().allow('', null).optional(),
 }).unknown(true);
 
+// ═══ INCIDENT NOTE SCHEMA - Joi validation for note creation ═══
+const noteSchema = Joi.object({
+  text: Joi.string().trim().max(1000).required(),
+  incidentType: Joi.string()
+    .valid('fuel_shortage', 'engine_failure', 'landslide', 'accident', 'terrorist_attack', 'natural_disaster', 'port_closure', 'customs_delay', 'weather_emergency', 'other')
+    .required(),
+  severity: Joi.string()
+    .valid('low', 'medium', 'high', 'critical')
+    .required(),
+  location: Joi.object({
+    lat: Joi.number().min(-90).max(90).required(),
+    lng: Joi.number().min(-180).max(180).required()
+  }).optional(),
+  estimatedDelay: Joi.number().min(0).max(720).optional()
+});
+
 function isValidDateValue(value) {
   if (value === null || value === undefined || value === '') return true;
   const parsed = new Date(value);
@@ -1520,6 +1536,102 @@ if (db && retentionEnabled) {
     });
   }, retentionRunEveryHours * 60 * 60 * 1000);
 }
+
+// ═══ INCIDENT NOTES ENDPOINT - Viewer incident reporting ═══
+app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) => {
+  if (!db) {
+    res.status(503).json({ error: 'Firestore not initialized' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { text, incidentType, severity, location, estimatedDelay, viewerEmail, viewerName } = req.body;
+
+  // Validate note data
+  const { error, value } = noteSchema.validate({
+    text,
+    incidentType,
+    severity,
+    location,
+    estimatedDelay
+  });
+
+  if (error) {
+    const messages = error.details.map(d => d.message).join('; ');
+    res.status(400).json({ error: `Validation failed: ${messages}` });
+    return;
+  }
+
+  try {
+    // Get shipment to verify it exists
+    const shipmentRef = db.collection('shipments').doc(id);
+    const shipmentSnap = await shipmentRef.get();
+
+    if (!shipmentSnap.exists) {
+      res.status(404).json({ error: 'Shipment not found' });
+      return;
+    }
+
+    const shipmentData = shipmentSnap.data();
+
+    // Create note
+    const noteData = {
+      text: value.text,
+      incidentType: value.incidentType,
+      severity: value.severity,
+      location: value.location || null,
+      estimatedDelay: value.estimatedDelay || 0,
+      createdBy: req.auth?.uid || 'system',
+      viewerEmail: viewerEmail || req.auth?.email || 'unknown',
+      viewerName: viewerName || 'Anonymous Viewer',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      trackingId: shipmentData.trackingId
+    };
+
+    // Add note to subcollection
+    const noteRef = await shipmentRef.collection('notes').add(noteData);
+
+    // Create alert for admin
+    const alertData = {
+      title: `Incident Report: ${value.incidentType}`,
+      message: value.text,
+      severity: value.severity,
+      type: 'incident_report',
+      status: 'active',
+      shipmentId: id,
+      trackingId: shipmentData.trackingId,
+      reportedBy: req.auth?.uid || 'system',
+      noteId: noteRef.id,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('alerts').add(alertData);
+
+    // Log to audit trail
+    await queueAuditEvent({
+      eventType: 'incident_note_created',
+      severity: 'info',
+      details: {
+        shipmentId: id,
+        trackingId: shipmentData.trackingId,
+        incidentType: value.incidentType,
+        severity: value.severity
+      },
+      req,
+      actor: req.auth?.email || 'unknown'
+    });
+
+    res.status(201).json({
+      ok: true,
+      noteId: noteRef.id,
+      message: 'Incident note created successfully'
+    });
+
+  } catch (e) {
+    console.error('Failed to create note:', e);
+    res.status(500).json({ error: 'Failed to create note' });
+  }
+}));
 
 app.listen(port, () => {
   console.log(`ShipGuard backend listening on http://localhost:${port}`);
