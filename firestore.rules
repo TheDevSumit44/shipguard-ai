@@ -1,0 +1,109 @@
+rules_version = '2';
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function role() {
+      return signedIn() && exists(userDocPath())
+        ? get(userDocPath()).data.role
+        : null;
+    }
+
+    function isAdmin() {
+      return role() == 'admin';
+    }
+
+    function isBackendServiceAccount() {
+      return request.auth != null 
+             && (request.auth.uid == 'firebase-adminsdk-fbsvc@shipguard-ai-thedevsumit44.iam.gserviceaccount.com'
+             || request.auth.token.firebase.identities != null
+             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isServiceAccount == true);
+    }
+
+    function canWriteOps() {
+      return isAdmin() || isBackendServiceAccount();
+    }
+
+    function roleUnchanged() {
+      return request.resource.data.role == resource.data.role;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn()
+                    && (
+                      isAdmin()
+                      || (request.auth.uid == uid && roleUnchanged())
+                    );
+      allow delete: if isAdmin();
+    }
+
+    match /shipments/{id} {
+      allow read: if signedIn();
+      allow create, update: if canWriteOps();
+      allow delete: if isAdmin();
+
+      // Notes subcollection - for viewer incident reports
+      match /notes/{noteId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /alerts/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /interventions/{id} {
+      allow read: if signedIn();
+      allow create, update: if canWriteOps();
+      allow delete: if isAdmin();
+    }
+
+    match /routeRecommendations/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /audit_logs/{id} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // ═══ ISSUE #20: EXPLICIT DENY ═══
+    }
+
+    match /incidentNotifications/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    match /webhook_retry_queue/{id} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // ═══ ISSUE #20: EXPLICIT DENY ═══
+    }
+
+    // ═══ ISSUE #20: EXPLICIT CATCH-ALL DENY ═══
+    // All other paths explicitly denied (defense in depth)
+    // Exception: Allow service account for backend operations
+    match /{document=**} {
+      allow read, write: if isBackendServiceAccount();
+    }
+
+  }
+
+}

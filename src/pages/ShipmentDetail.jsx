@@ -6,7 +6,11 @@ import {
   ChevronRight, Zap, Route, Phone, Bell, GitBranch, FileCheck, Activity, ExternalLink,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getShipmentById, upsertRouteRecommendationForShipment } from '../services/firestoreService';
+import { getShipmentById, upsertRouteRecommendationForShipment, getShipmentNotes, subscribeToShipmentNotes, subscribeToShipmentById } from '../services/firestoreService';
+import { useAuth } from '../contexts/AuthContext';
+import IncidentReportModal from '../components/IncidentReportModal';
+import IncidentNotesTimeline from '../components/IncidentNotesTimeline';
+import AdminIncidentDetailsModal from '../components/AdminIncidentDetailsModal';
 import { predictDelay } from '../lib/ml/delayPredictor';
 import { getRecommendations, getUrgencyLabel } from '../lib/ml/recommendationEngine';
 import { getWeatherByCity } from '../lib/api/weatherApi';
@@ -19,6 +23,7 @@ const interventionIcons = { Route, Truck, Bell, Zap, Phone, Package, GitBranch, 
 export default function ShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const leftColumnRef = useRef(null);
   const aiCardRef = useRef(null);
   const [shipment, setShipment] = useState(null);
@@ -29,6 +34,13 @@ export default function ShipmentDetail() {
   const [routeIntelLoading, setRouteIntelLoading] = useState(false);
   const [routeCardHeight, setRouteCardHeight] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Incident reporting
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [showAdminDetailsModal, setShowAdminDetailsModal] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -73,6 +85,41 @@ export default function ShipmentDetail() {
       }
     }
     load();
+
+    // Set up real-time subscription to shipment updates
+    const unsub = subscribeToShipmentById(id, (updatedShipment) => {
+      if (updatedShipment) {
+        const pred = predictDelay(updatedShipment);
+        
+        // Only overwrite with prediction if admin hasn't manually set riskLevel
+        // If admin has set it (incidentResponse flag), preserve their choice
+        const isAdminOverride = updatedShipment.incidentResponse === true;
+        
+        updatedShipment.riskScore = pred.riskScore;
+        // Preserve admin-set risk level if it was manually changed
+        if (!isAdminOverride) {
+          updatedShipment.riskLevel = pred.riskLevel;
+          updatedShipment.riskColor = pred.riskColor;
+        } else {
+          // Use admin's manually set risk level to determine color
+          const riskColors = { low: '#22c55e', medium: '#f59e0b', high: '#f97316', critical: '#ef4444' };
+          updatedShipment.riskColor = riskColors[updatedShipment.riskLevel] || pred.riskColor;
+        }
+        
+        // Preserve admin-set estimated delay if manually updated
+        if (!updatedShipment.estimatedDelay || updatedShipment.estimatedDelay === 0) {
+          updatedShipment.estimatedDelay = pred.estimatedDelay;
+        }
+        
+        setShipment(updatedShipment);
+        setPrediction(pred);
+        setRecommendations(getRecommendations(pred, updatedShipment));
+      }
+    });
+
+    return () => {
+      unsub();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -101,6 +148,33 @@ export default function ShipmentDetail() {
       cancelled = true;
     };
   }, [shipment, prediction]);
+
+  // Fetch and subscribe to incident notes
+  useEffect(() => {
+    if (!id || !shipment) return;
+
+    setNotesLoading(true);
+
+    // Fetch initial notes
+    getShipmentNotes(id)
+      .then(initialNotes => {
+        setNotes(initialNotes);
+        setNotesLoading(false);
+      })
+      .catch(e => {
+        console.error('Failed to fetch notes:', e);
+        setNotesLoading(false);
+      });
+
+    // Subscribe to real-time updates
+    const unsub = subscribeToShipmentNotes(id, (updatedNotes) => {
+      setNotes(updatedNotes);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [id, shipment]);
 
   useEffect(() => {
     const GAP_PX = 24; // Matches gap-6 between right-column cards.
@@ -174,12 +248,31 @@ export default function ShipmentDetail() {
             <p className="text-slate-500 text-sm mt-0.5">{shipment.product} • {shipment.customer}</p>
           </div>
         </div>
-        {urgency && (
-          <div className={`px-4 py-2 rounded-xl ${urgency.bg}`}>
-            <p className={`text-sm font-semibold ${urgency.color}`}>{urgency.label}</p>
-          </div>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {userProfile?.role === 'viewer' && (
+            <button
+              onClick={() => setShowIncidentModal(true)}
+              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium text-sm transition-colors flex items-center gap-2"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Report Incident
+            </button>
+          )}
+          {urgency && (
+            <div className={`px-4 py-2 rounded-xl ${urgency.bg}`}>
+              <p className={`text-sm font-semibold ${urgency.color}`}>{urgency.label}</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Incident Report Modal */}
+      <IncidentReportModal
+        isOpen={showIncidentModal}
+        onClose={() => setShowIncidentModal(false)}
+        shipmentId={id}
+        trackingId={shipment.trackingId}
+      />
 
       {/* Risk Score Hero Card */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="stat-card p-0 overflow-hidden">
@@ -613,6 +706,37 @@ export default function ShipmentDetail() {
         </div>
 
       </div>
+
+      {/* Incident Report Modal */}
+      <IncidentReportModal
+        isOpen={showIncidentModal}
+        onClose={() => setShowIncidentModal(false)}
+        shipmentId={id}
+        trackingId={shipment?.trackingId}
+      />
+
+      {/* Admin Incident Details Modal */}
+      <AdminIncidentDetailsModal
+        isOpen={showAdminDetailsModal}
+        onClose={() => {
+          setShowAdminDetailsModal(false);
+          setSelectedIncident(null);
+        }}
+        incidentNote={selectedIncident}
+        shipmentId={id}
+      />
+
+      {/* Incident Notes Timeline */}
+      <IncidentNotesTimeline
+        notes={notes}
+        loading={notesLoading}
+        showHeader={true}
+        shipmentId={id}
+        onAdminViewDetails={(note) => {
+          setSelectedIncident(note);
+          setShowAdminDetailsModal(true);
+        }}
+      />
     </div>
   );
 }

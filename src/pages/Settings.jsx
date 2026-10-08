@@ -91,8 +91,11 @@ export default function Settings() {
   const tabs = [
     { id: 'account', label: 'Account', icon: User, subtitle: 'Profile and access' },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'integrations', label: 'Integrations', icon: Key },
-    { id: 'preferences', label: 'Preferences', icon: Monitor },
+    // These tabs are admin-only
+    ...(userProfile?.role === 'admin' ? [
+      { id: 'integrations', label: 'Integrations', icon: Key },
+      { id: 'preferences', label: 'Preferences', icon: Monitor },
+    ] : []),
   ];
 
   return (
@@ -119,7 +122,11 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center">
                 {currentUser?.photoURL ? (
-                  <img src={currentUser.photoURL} alt="" className="w-14 h-14 rounded-2xl object-cover" />
+                  <img 
+                    src={currentUser.photoURL} 
+                    alt="" 
+                    className="w-14 h-14 rounded-2xl object-cover" 
+                  />
                 ) : (
                   <User className="w-7 h-7 text-white" />
                 )}
@@ -293,8 +300,8 @@ export default function Settings() {
             </div>
           )}
 
-          {/* API Keys / Integrations */}
-          {activeTab === 'integrations' && (
+          {/* API Keys / Integrations - Admin Only */}
+          {activeTab === 'integrations' && userProfile?.role === 'admin' && (
             <div className="space-y-4">
               <div className="stat-card space-y-2">
                 <h3 className="text-lg font-semibold text-slate-800">API Integrations</h3>
@@ -324,8 +331,8 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Preferences */}
-          {activeTab === 'preferences' && (
+          {/* Preferences - Admin Only */}
+          {activeTab === 'preferences' && userProfile?.role === 'admin' && (
             <div className="space-y-4">
               <div className="stat-card space-y-2">
                 <h3 className="text-lg font-semibold text-slate-800">Operational Preferences</h3>

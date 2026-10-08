@@ -25,8 +25,18 @@ const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const DEFAULT_NOTIFICATIONS = { email: true, push: true, sms: false };
 const DEFAULT_PREFERENCES = { riskThreshold: 60, slaWarningHours: 48, digestTime: '08:00' };
 const DEFAULT_INTEGRATIONS = { weatherApiKey: '', mapsApiKey: '', newsApiKey: '' };
-const ADMIN_EMAIL_WHITELIST = ['shirotprusty4444@gmail.com'];
+const ADMIN_EMAIL_WHITELIST = (
+  import.meta.env.VITE_ADMIN_EMAILS || ''
+).split(',').map(e => e.trim()).filter(Boolean);
 const DEFAULT_ROLE = 'viewer';
+
+// ═══ ISSUE #26: ADMIN WHITELIST LOGGING ═══
+// Log admin configuration status for visibility
+if (ADMIN_EMAIL_WHITELIST.length === 0) {
+  console.warn('[Auth] VITE_ADMIN_EMAILS is empty or not configured. No admin users will be available.');
+} else {
+  // Admin whitelist configured - do not log emails for security
+}
 
 function isLikelyMobileBrowser() {
   if (typeof navigator === 'undefined') return false;
@@ -97,7 +107,8 @@ export function AuthProvider({ children }) {
       await setDoc(ref, {
         displayName: user.displayName || '',
         email: user.email,
-        photoURL: user.photoURL || null,
+        // NOTE: photoURL is NOT stored - it's always fetched fresh from Firebase currentUser
+        // This prevents expired Google profile picture URLs from being cached in Firestore
         role: extra.role || 'viewer',
         company: extra.company || '',
         notifications: DEFAULT_NOTIFICATIONS,
@@ -105,6 +116,7 @@ export function AuthProvider({ children }) {
         integrations: DEFAULT_INTEGRATIONS,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        lastActive: serverTimestamp(),
       });
     } else {
       const existing = snap.data();
@@ -113,13 +125,15 @@ export function AuthProvider({ children }) {
       if (!existing.preferences) patch.preferences = DEFAULT_PREFERENCES;
       if (!existing.integrations) patch.integrations = DEFAULT_INTEGRATIONS;
 
-      if (Object.keys(patch).length > 0) {
-        patch.updatedAt = serverTimestamp();
-        await updateDoc(ref, patch);
-      }
+      // Always update lastActive on login
+      patch.lastActive = serverTimestamp();
+      patch.updatedAt = serverTimestamp();
+      
+      await updateDoc(ref, patch);
     }
     const updated = await getDoc(ref);
-    setUserProfile({ id: updated.id, ...updated.data() });
+    // Include photoURL from current Firebase user (never from Firestore)
+    setUserProfile({ id: updated.id, ...updated.data(), photoURL: user.photoURL || null });
   }
 
   async function signup(email, password, displayName, company, role) {
@@ -218,13 +232,14 @@ export function AuthProvider({ children }) {
     }
     markActivity();
 
-    const useRedirectFlow = false;
+    // ═══ ISSUE #22: REMOVED DEAD CODE ═══
+    // Removed: const useRedirectFlow = false;
+    // Removed: if (!useRedirectFlow) { ... } - always uses popup, never uses redirect
 
     try {
-      if (!useRedirectFlow) {
-        const cred = await signInWithPopup(auth, googleProvider);
-        localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-        localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
+      const cred = await signInWithPopup(auth, googleProvider);
+      localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+      localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
         
         // SECURITY: Check if user requested admin role but is not whitelisted
         if (role === 'admin' && !ADMIN_EMAIL_WHITELIST.includes(cred.user.email)) {
@@ -260,10 +275,6 @@ export function AuthProvider({ children }) {
         }
 
         return { method: 'popup', user: cred.user };
-      }
-
-      await signInWithRedirect(auth, googleProvider);
-      return { method: 'redirect' };
     } catch (e) {
       if (e.code === 'auth/role-mismatch') {
         setAuthError(e.message);
@@ -356,7 +367,7 @@ export function AuthProvider({ children }) {
               await setDoc(ref, {
                 displayName: user.displayName || '',
                 email: user.email,
-                photoURL: user.photoURL || null,
+                // NOTE: photoURL is NOT stored - it's always fetched fresh from Firebase currentUser
                 role: roleToSet,
                 company: '',
                 notifications: DEFAULT_NOTIFICATIONS,

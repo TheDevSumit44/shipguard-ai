@@ -4,7 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, UserCheck, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const ADMIN_EMAIL_WHITELIST = ['shirotprusty4444@gmail.com'];
+// Get admin whitelist from environment variable (same source as AuthContext)
+const ADMIN_EMAIL_WHITELIST = (
+  import.meta.env.VITE_ADMIN_EMAILS || ''
+).split(',').map(e => e.trim()).filter(Boolean);
 
 export default function Login() {
   const { login, loginWithGoogle, currentUser, authError, clearAuthError } = useAuth();
@@ -37,9 +40,14 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password, role);
-      toast.success('Welcome back!');
-      navigate('/dashboard');
+      const result = await login(email, password, role);
+      if (result) {
+        toast.success('Welcome back!');
+        // Add a small delay to ensure currentUser is updated before navigation
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 50);
+      }
     } catch (err) {
       const msg = err.code === 'auth/invalid-credential' ? 'Invalid email or password'
         : err.code === 'auth/too-many-requests' ? 'Too many attempts. Please try again later'
@@ -62,7 +70,10 @@ export default function Login() {
       const result = await loginWithGoogle(role);
       if (result?.method === 'popup') {
         toast.success('Signed in successfully!');
-        navigate('/dashboard');
+        // Add a small delay to ensure currentUser is updated before navigation
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 50);
       } else {
         toast.success('Redirecting to Google sign-in...');
       }

@@ -67,11 +67,25 @@ export async function buildRouteIntelligence(shipment) {
   let destinationGeo = null;
   let geocodeError = null;
 
+  // ═══ ISSUE #16: USE PROMISE.ALLSETTLED ═══
+  // Handle partial failures in parallel API calls
   try {
-    [originGeo, destinationGeo] = await Promise.all([
+    const geocodeResults = await Promise.allSettled([
       geocodeRouteLocation(originCity),
       geocodeRouteLocation(destinationCity),
     ]);
+    
+    if (geocodeResults[0].status === 'fulfilled') {
+      originGeo = geocodeResults[0].value;
+    } else {
+      geocodeError = new Error(`Origin geocoding failed: ${geocodeResults[0].reason?.message || 'Unknown error'}`);
+    }
+    
+    if (geocodeResults[1].status === 'fulfilled') {
+      destinationGeo = geocodeResults[1].value;
+    } else {
+      geocodeError = new Error(`Destination geocoding failed: ${geocodeResults[1].reason?.message || 'Unknown error'}`);
+    }
   } catch (error) {
     geocodeError = error;
   }
@@ -93,13 +107,23 @@ export async function buildRouteIntelligence(shipment) {
   let originForecast = [];
   let destinationForecast = [];
   let weatherUnavailableReason = null;
-  try {
-    [originForecast, destinationForecast] = await Promise.all([
-      getForecastByCoords(originGeo.lat, originGeo.lon),
-      getForecastByCoords(destinationGeo.lat, destinationGeo.lon),
-    ]);
-  } catch (error) {
-    weatherUnavailableReason = error.message;
+  
+  // ═══ ISSUE #16: ALLSETTLED FOR WEATHER ═══
+  const forecastResults = await Promise.allSettled([
+    getForecastByCoords(originGeo.lat, originGeo.lon),
+    getForecastByCoords(destinationGeo.lat, destinationGeo.lon),
+  ]);
+  
+  if (forecastResults[0].status === 'fulfilled') {
+    originForecast = forecastResults[0].value;
+  } else {
+    weatherUnavailableReason = `Origin forecast failed: ${forecastResults[0].reason?.message || 'Unknown error'}`;
+  }
+  
+  if (forecastResults[1].status === 'fulfilled') {
+    destinationForecast = forecastResults[1].value;
+  } else {
+    weatherUnavailableReason = `Destination forecast failed: ${forecastResults[1].reason?.message || 'Unknown error'}`;
   }
 
   const now = Date.now();

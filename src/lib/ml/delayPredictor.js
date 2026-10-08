@@ -1,5 +1,11 @@
-// ShipGuard AI - Delay Prediction Engine
-// Weighted multi-factor risk scoring model
+/**
+ * ═══ ISSUE #32: ShipGuard AI - Delay Prediction Engine ═══
+ * Weighted multi-factor risk scoring model
+ * 
+ * Predicts shipment delays based on weather, traffic, carrier reliability,
+ * route complexity, distance/time ratio, historical data, port congestion,
+ * and news disruptions.
+ */
 
 const WEIGHTS = {
   weather: 0.20,
@@ -26,6 +32,15 @@ const WEATHER_SEVERITY = {
   fog: 25, haze: 12, dust: 20, smoke: 18, squall: 60,
 };
 
+/**
+ * Calculate weather-based delay risk score
+ * @param {Object} weather - Weather data object
+ * @param {string} [weather.condition] - Weather condition (clear, rain, snow, etc.)
+ * @param {number} [weather.temperature] - Temperature in Celsius
+ * @param {number} [weather.windSpeed] - Wind speed in km/h
+ * @param {number} [weather.visibility] - Visibility in km
+ * @returns {number} Risk score 0-100
+ */
 function calculateWeatherScore(weather) {
   if (!weather) return 20;
   const condition = weather.condition?.toLowerCase() || 'clear';
@@ -39,6 +54,14 @@ function calculateWeatherScore(weather) {
   return Math.min(base, 100);
 }
 
+/**
+ * Calculate traffic-based delay risk score
+ * @param {Object} traffic - Traffic data object
+ * @param {string} [traffic.congestion] - Congestion level (low, moderate, high, severe, gridlock)
+ * @param {number} [traffic.incidents] - Number of traffic incidents
+ * @param {boolean} [traffic.roadClosures] - Whether there are road closures
+ * @returns {number} Risk score 0-100
+ */
 function calculateTrafficScore(traffic) {
   if (!traffic) return 15;
   const congestionMap = { low: 10, moderate: 30, high: 55, severe: 80, gridlock: 95 };
@@ -49,11 +72,25 @@ function calculateTrafficScore(traffic) {
   return Math.min(base, 100);
 }
 
+/**
+ * Calculate carrier reliability-based delay risk score
+ * @param {string} carrier - Carrier name
+ * @returns {number} Risk score 0-100
+ */
 function calculateCarrierScore(carrier) {
   const reliability = CARRIER_RELIABILITY[carrier] || CARRIER_RELIABILITY.default;
   return Math.round((1 - reliability) * 100);
 }
 
+/**
+ * Calculate route complexity-based delay risk score
+ * @param {Object} route - Route data object
+ * @param {number} [route.stops] - Number of stops
+ * @param {boolean} [route.international] - Whether route is international
+ * @param {boolean} [route.customsClearance] - Whether customs clearance required
+ * @param {number} [route.modeChanges] - Number of transport mode changes
+ * @returns {number} Risk score 0-100
+ */
 function calculateRouteComplexity(route) {
   if (!route) return 20;
   let score = 0;
@@ -64,6 +101,14 @@ function calculateRouteComplexity(route) {
   return Math.min(score, 100);
 }
 
+/**
+ * Calculate distance/time ratio delay risk score
+ * @param {Object} shipment - Shipment data
+ * @param {number} [shipment.distanceRemaining] - Distance remaining in km
+ * @param {number} [shipment.hoursRemaining] - Hours remaining for delivery
+ * @param {string} [shipment.mode] - Transport mode (air, sea, road)
+ * @returns {number} Risk score 0-100
+ */
 function calculateDistanceTimeScore(shipment) {
   if (!shipment.distanceRemaining || !shipment.hoursRemaining) return 25;
   const requiredSpeed = shipment.distanceRemaining / shipment.hoursRemaining;
@@ -76,18 +121,37 @@ function calculateDistanceTimeScore(shipment) {
   return 5;
 }
 
+/**
+ * Calculate historical delay rate score
+ * @param {Object} history - Historical data
+ * @param {number} [history.delayRate] - Fraction of delayed shipments (0-1)
+ * @returns {number} Risk score 0-100
+ */
 function calculateHistoricalScore(history) {
   if (!history) return 15;
   const delayRate = history.delayRate || 0;
   return Math.round(delayRate * 100);
 }
 
+/**
+ * Calculate port congestion delay risk score
+ * @param {Object} port - Port data
+ * @param {string} [port.congestion] - Port congestion level (low, moderate, high, critical)
+ * @returns {number} Risk score 0-100
+ */
 function calculatePortCongestion(port) {
   if (!port) return 10;
   const levelMap = { low: 5, moderate: 25, high: 55, critical: 85 };
   return levelMap[port.congestion?.toLowerCase()] ?? 15;
 }
 
+/**
+ * Calculate news disruptions delay risk score
+ * @param {Object} news - News data
+ * @param {Array<Object>} [news.disruptions] - List of disruption events
+ * @param {string} [news.disruptions[].severity] - Severity level (low, moderate, high, critical)
+ * @returns {number} Risk score 0-100
+ */
 function calculateNewsScore(news) {
   if (!news || !news.disruptions) return 0;
   let score = 0;
@@ -98,6 +162,27 @@ function calculateNewsScore(news) {
   return Math.min(score, 100);
 }
 
+/**
+ * Predict shipment delay based on multiple factors
+ * @param {Object} shipment - Shipment data
+ * @param {string} [shipment.carrier] - Carrier name
+ * @param {string} [shipment.mode] - Transport mode (road, rail, air, sea)
+ * @param {string} [shipment.eta] - Estimated time of arrival (ISO date string)
+ * @param {Object} [shipment.weather] - Weather data object
+ * @param {Object} [shipment.traffic] - Traffic data object
+ * @param {Object} [shipment.route] - Route data object
+ * @param {Object} [shipment.port] - Port data object
+ * @param {Object} [shipment.history] - Historical shipment data
+ * @param {Object} [shipment.news] - News and disruption data
+ * @returns {Object} Delay prediction result with risk score, level, factors, and confidence
+ * @returns {number} result.riskScore - Overall risk score 0-100
+ * @returns {string} result.riskLevel - Risk level (low, medium, high, critical)
+ * @returns {string} result.riskColor - Hex color for UI display
+ * @returns {number} result.estimatedDelay - Estimated delay in hours
+ * @returns {Date} result.adjustedEta - ETA adjusted for predicted delay
+ * @returns {Array<Object>} result.factors - Individual factor contributions sorted by impact
+ * @returns {number} result.confidence - Prediction confidence 60-95%
+ */
 export function predictDelay(shipment) {
   const scores = {
     weather: calculateWeatherScore(shipment.weather),

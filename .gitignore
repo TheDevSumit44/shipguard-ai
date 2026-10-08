@@ -1,20 +1,30 @@
 node_modules
 dist
+build
 
-# Environment files
+# Environment files (CRITICAL - never commit credentials)
 .env
 .env.local
-.env.*
+.env.*.local
+.env.development
+.env.test
+.env.production
 !.env.example
 backend/.env
-backend/.env.*
+backend/.env.local
+backend/.env.*.local
+backend/.env.development
+backend/.env.test
+backend/.env.production
 !backend/.env.example
 
-# Secrets and credentials
+# Secrets and credentials (CRITICAL - NEVER commit these)
 backend/service-account.json
+backend/firebase-service-account.json
 *firebase-adminsdk*.json
 *service-account*.json
 *-key.json
+*-credentials.json
 google-credentials.json
 credentials.json
 *.pem
@@ -23,29 +33,122 @@ credentials.json
 *.pfx
 *.crt
 *.cer
+*.jks
+*.keystore
+*.pub
+*.asc
 
-# Logs
+# Logs and debug files
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+debug.log
+error.log
 
-# OS files
+# OS and system files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-
-# IDE
-.vscode
-.idea
+*.bak
+*.tmp
 *.swp
 *.swo
 *~
+.AppleDouble
+.LSOverride
 
-# Testing
+# IDE and Editor files
+.vscode
+.idea
+.atom
+.sublime-project
+.sublime-workspace
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.iml
+
+# Testing and coverage
 coverage
 .nyc_output
+.jest-cache
+.mocha-cache
+test-results
+test-report.html
+*.lcov
 
 # Build outputs
 build
 dist
+.next
+.nuxt
+out
+.cache
+.parcel-cache
 .env.local.js
+
+# Runtime and temporary files
+.runtime
+tmp
+temp
+*.pid
+*.seed
+*.pid.lock
+
+# Package manager lock files (optional - usually committed)
+# Uncomment if you want to ignore these
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Development server
+.dev
+.dev.js
+.hot-reload
+webpack.config.local.js
+
+# Firebase
+.firebaserc
+firebase-debug.log
+.firebase
+
+# Sentry
+.sentryclirc
+
+# API keys and tokens (if stored as files)
+.apikeys
+tokens.json
+*.token
+
+# Production builds and bundles
+*.bundle.js
+*.min.js
+*.min.css
+
+# Environment-specific files
+dev.log
+prod.log
+test.log
+
+# Node-specific
+npm-shrinkwrap.json (if not committed)
+
+# Misc
+.env.vault
+.nitro
+dist-ssr
+*.egg-info
+.python-version

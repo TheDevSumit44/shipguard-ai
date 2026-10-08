@@ -297,18 +297,71 @@ export async function addAlert(data) {
   });
 }
 
+// ═══ ISSUE #30: GRANULAR AUDIT LOGGING FOR ALERT CHANGES ═══
+/**
+ * Update an alert with audit logging
+ * @param {string} id - Alert ID
+ * @param {Object} data - Data to update
+ * @returns {Promise<void>}
+ */
 export async function updateAlert(id, data) {
+  const oldDoc = await getDoc(doc(db, 'alerts', id));
+  const oldData = oldDoc.exists() ? oldDoc.data() : {};
+  
+  // Log to audit trail
+  console.log(`[Audit] Alert ${id} updated: ${JSON.stringify({
+    oldStatus: oldData.status,
+    newStatus: data.status,
+    oldSeverity: oldData.severity,
+    newSeverity: data.severity,
+    userId: auth.currentUser?.uid
+  })}`);
+  
   return updateDoc(doc(db, 'alerts', id), { ...data, updatedAt: serverTimestamp() });
 }
 
+/**
+ * Acknowledge an alert with audit logging
+ * @param {string} id - Alert ID
+ * @returns {Promise<void>}
+ */
 export async function acknowledgeAlert(id) {
+  const oldDoc = await getDoc(doc(db, 'alerts', id));
+  const oldStatus = oldDoc.data()?.status || 'unknown';
+  
+  // Log to audit trail
+  console.log(`[Audit] Alert ${id} acknowledged: ${JSON.stringify({
+    previousStatus: oldStatus,
+    newStatus: 'acknowledged',
+    userId: auth.currentUser?.uid,
+    timestamp: new Date().toISOString()
+  })}`);
+  
   return updateDoc(doc(db, 'alerts', id), {
     status: 'acknowledged',
     acknowledgedAt: serverTimestamp(),
   });
 }
 
+/**
+ * Resolve an alert with audit logging
+ * @param {string} id - Alert ID
+ * @param {string} resolution - Resolution details
+ * @returns {Promise<void>}
+ */
 export async function resolveAlert(id, resolution) {
+  const oldDoc = await getDoc(doc(db, 'alerts', id));
+  const oldStatus = oldDoc.data()?.status || 'unknown';
+  
+  // Log to audit trail
+  console.log(`[Audit] Alert ${id} resolved: ${JSON.stringify({
+    previousStatus: oldStatus,
+    newStatus: 'resolved',
+    resolution,
+    userId: auth.currentUser?.uid,
+    timestamp: new Date().toISOString()
+  })}`);
+  
   return updateDoc(doc(db, 'alerts', id), {
     status: 'resolved',
     resolution,
@@ -588,5 +641,246 @@ export async function getUserLastActive(userId) {
   } catch (e) {
     console.error('Failed to fetch user last active:', e);
     return null;
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Incident Notes Functions - Viewer incident reporting
+// ──────────────────────────────────────────────────────
+
+export async function addIncidentNote(shipmentId, noteData) {
+  try {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
+    
+    const response = await fetch(`${backendUrl}/api/shipments/${shipmentId}/notes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(noteData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to add incident note: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (e) {
+    console.error('Failed to add incident note:', e);
+    throw e;
+  }
+}
+
+export async function getShipmentNotes(shipmentId) {
+  try {
+    const notesRef = collection(db, 'shipments', shipmentId, 'notes');
+    const q = query(notesRef, orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    
+    return snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (e) {
+    console.error('Failed to fetch shipment notes:', e);
+    return [];
+  }
+}
+
+export function subscribeToShipmentNotes(shipmentId, callback) {
+  try {
+    const notesRef = collection(db, 'shipments', shipmentId, 'notes');
+    const q = query(notesRef, orderBy('createdAt', 'desc'));
+    
+    const unsub = onSnapshot(q, (snap) => {
+      const notes = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      callback(notes);
+    }, (error) => {
+      console.error('Failed to subscribe to shipment notes:', error);
+      callback([]);
+    });
+
+    return unsub;
+  } catch (e) {
+    console.error('Failed to set up notes subscription:', e);
+    return () => {};
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Real-time subscription to a single shipment by ID
+// ──────────────────────────────────────────────────────
+
+export function subscribeToShipmentById(shipmentId, callback) {
+  try {
+    const shipmentRef = doc(db, 'shipments', shipmentId);
+    
+    const unsub = onSnapshot(shipmentRef, (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.data());
+      } else {
+        console.warn('Shipment not found:', shipmentId);
+        callback(null);
+      }
+    }, (error) => {
+      console.error('Failed to subscribe to shipment:', error);
+      callback(null);
+    });
+
+    return unsub;
+  } catch (e) {
+    console.error('Failed to set up shipment subscription:', e);
+    return () => {};
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Incident Resolved Notifications
+// ──────────────────────────────────────────────────────
+
+export async function createResolvedNotification(shipmentId, viewerEmail, resolvedBy, metadata = {}) {
+  try {
+    const notificationsRef = collection(db, 'incidentNotifications');
+    
+    const notification = {
+      shipmentId,
+      viewerEmail,
+      type: metadata.type || 'issue_resolved',
+      title: metadata.title || 'Incident Resolved',
+      message: metadata.message || `An incident for shipment ${shipmentId} has been resolved`,
+      resolvedBy,
+      createdAt: serverTimestamp(),
+      read: false,
+      ...metadata
+    };
+
+    const docRef = await addDoc(notificationsRef, notification);
+    return { id: docRef.id, ...notification };
+  } catch (e) {
+    console.error('Failed to create resolved notification:', e);
+    throw e;
+  }
+}
+
+export async function getIncidentNotifications(viewerEmail) {
+  try {
+    const notificationsRef = collection(db, 'incidentNotifications');
+    const q = query(
+      notificationsRef,
+      where('viewerEmail', '==', viewerEmail),
+      orderBy('createdAt', 'desc')
+    );
+    const snap = await getDocs(q);
+    
+    return snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (e) {
+    console.error('Failed to fetch incident notifications:', e);
+    return [];
+  }
+}
+
+export function subscribeToIncidentNotifications(viewerEmail, callback) {
+  try {
+    const notificationsRef = collection(db, 'incidentNotifications');
+    const q = query(
+      notificationsRef,
+      where('viewerEmail', '==', viewerEmail),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsub = onSnapshot(q, (snap) => {
+      const notifications = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      callback(notifications);
+    }, (error) => {
+      // Check if error is due to missing index
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        console.warn('Firestore composite index not yet created for incident notifications. Create it here: https://console.firebase.google.com/v1/r/project/shipguard-ai-thedevsumit44/firestore/indexes');
+        // Return empty notifications instead of erroring
+        callback([]);
+      } else {
+        console.error('Failed to subscribe to incident notifications:', error);
+        callback([]);
+      }
+    });
+
+    return unsub;
+  } catch (e) {
+    console.error('Failed to set up notifications subscription:', e);
+    return () => {};
+  }
+}
+
+export async function markNotificationAsRead(notificationId) {
+  try {
+    const notificationRef = doc(db, 'incidentNotifications', notificationId);
+    await updateDoc(notificationRef, { read: true });
+  } catch (e) {
+    console.error('Failed to mark notification as read:', e);
+    throw e;
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Delete Incident Notes
+// ──────────────────────────────────────────────────────
+
+export async function deleteIncidentNote(shipmentId, noteId) {
+  try {
+    console.log(`Attempting to delete incident note: shipmentId=${shipmentId}, noteId=${noteId}`);
+    
+    // Delete the incident note
+    const noteRef = doc(db, 'shipments', shipmentId, 'notes', noteId);
+    await deleteDoc(noteRef);
+    console.log(`Successfully deleted incident note ${noteId}`);
+    
+    // Cascade delete associated alerts linked by shipmentId only
+    // (We'll filter by noteId in-memory since composite indexes might not be set up)
+    const alertsSnap = await getDocs(
+      query(collection(db, 'alerts'), 
+        where('shipmentId', '==', shipmentId)
+      )
+    );
+    console.log(`Found ${alertsSnap.docs.length} total alerts for shipment, filtering by noteId...`);
+    
+    // Filter alerts by noteId in JavaScript (since composite index might not exist)
+    const alertsToDelete = alertsSnap.docs.filter(doc => doc.data().noteId === noteId);
+    console.log(`Filtered to ${alertsToDelete.length} alerts with matching noteId`);
+    
+    const deleteAlertPromises = alertsToDelete.map(alertDoc => deleteDoc(alertDoc.ref));
+    await Promise.all(deleteAlertPromises);
+    
+    console.log(`Successfully deleted incident note ${noteId} and ${deleteAlertPromises.length} associated alerts`);
+    return true;
+  } catch (e) {
+    console.error('Failed to delete incident note:', e);
+    console.error('Error code:', e.code);
+    console.error('Error message:', e.message);
+    throw e;
+  }
+}
+
+export async function deleteAllIncidentNotes(shipmentId) {
+  try {
+    const notesRef = collection(db, 'shipments', shipmentId, 'notes');
+    const snap = await getDocs(notesRef);
+    
+    const deletePromises = snap.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    return snap.docs.length;
+  } catch (e) {
+    console.error('Failed to delete all incident notes:', e);
+    throw e;
   }
 }
