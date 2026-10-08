@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { updateShipment, getShipmentById, createResolvedNotification } from '../services/firestoreService';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import { getAdminRiskOverrideData } from '../lib/riskScoreCalculator';
 
 const INCIDENT_LABELS = {
   fuel_shortage: 'Fuel Shortage',
@@ -79,10 +80,18 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
     setUpdating(true);
 
     try {
+      // Get dynamic risk metrics if risk level was changed
+      const riskOverrideData = updateFormData.riskLevel 
+        ? getAdminRiskOverrideData(updateFormData.riskLevel)
+        : {};
+
       const updateData = {
         status: updateFormData.status || shipment.status,
         riskLevel: updateFormData.riskLevel || shipment.riskLevel,
-        estimatedDelay: updateFormData.estimatedDelay ? parseInt(updateFormData.estimatedDelay) : shipment.estimatedDelay,
+        riskScore: riskOverrideData.riskScore !== undefined ? riskOverrideData.riskScore : shipment.riskScore,
+        estimatedDelay: updateFormData.estimatedDelay 
+          ? parseInt(updateFormData.estimatedDelay) 
+          : (riskOverrideData.estimatedDelay !== undefined ? riskOverrideData.estimatedDelay : shipment.estimatedDelay),
         adminNotes: updateFormData.notes,
         lastUpdatedBy: 'admin',
         lastUpdatedAt: new Date().toISOString(),
@@ -90,7 +99,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
       };
 
       await updateShipment(shipmentId, updateData);
-      toast.success('Shipment updated successfully. System will recalculate risk...');
+      toast.success('Shipment updated successfully. Risk score and delay updated based on label...');
       setShowUpdateForm(false);
     } catch (error) {
       console.error('Failed to update shipment:', error);
@@ -104,11 +113,34 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
     e.preventDefault();
 
     try {
-      // In a real app, this would send an email/SMS via a backend service
-      console.log('Contact:', contactFormData);
-      toast.success(
-        `${contactFormData.contactType === 'email' ? 'Email' : 'SMS'} sent to ${contactFormData.contactDetails}`
-      );
+      if (contactFormData.contactType === 'message') {
+        // Send ShipGuard message to viewer
+        if (!incidentNote?.viewerEmail) {
+          toast.error('Viewer email not found');
+          return;
+        }
+        
+        await createResolvedNotification(
+          shipmentId,
+          incidentNote.viewerEmail,
+          user?.email || 'admin@shipguard.com',
+          {
+            type: 'admin_message',
+            title: 'Message from Admin',
+            message: contactFormData.message,
+            timestamp: new Date().toISOString()
+          }
+        );
+        
+        toast.success(`Message sent to ${incidentNote.viewerName || incidentNote.viewerEmail}`);
+      } else {
+        // Send email/SMS via contact details
+        console.log('Contact:', contactFormData);
+        toast.success(
+          `${contactFormData.contactType === 'email' ? 'Email' : 'SMS'} sent to ${contactFormData.contactDetails}`
+        );
+      }
+      
       setShowContactForm(false);
       setContactFormData({
         contactType: 'email',
@@ -206,6 +238,17 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                   </div>
                 ) : (
                   <>
+                    {/* Viewer Information */}
+                    {incidentNote.viewerName && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <p className="text-xs font-semibold text-blue-700 mb-2">Reported By</p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-slate-800">{incidentNote.viewerName}</p>
+                          <p className="text-xs text-slate-600">{incidentNote.viewerEmail}</p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Incident Details */}
                     <div className={`p-4 rounded-lg border-2 ${SEVERITY_COLORS[incidentNote.severity]}`}>
                       <div className="space-y-3">
@@ -435,7 +478,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                         <div>
                           <label className="block text-xs font-medium text-slate-700 mb-1">Contact Method</label>
                           <div className="flex gap-3">
-                            {['email', 'phone', 'sms'].map(type => (
+                            {['email', 'phone', 'sms', 'message'].map(type => (
                               <label key={type} className="flex items-center gap-2 cursor-pointer">
                                 <input
                                   type="radio"
@@ -445,7 +488,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                                   onChange={(e) => setContactFormData({...contactFormData, contactType: e.target.value})}
                                   className="w-4 h-4"
                                 />
-                                <span className="text-sm capitalize">{type}</span>
+                                <span className="text-sm capitalize">{type === 'message' ? 'ShipGuard Message' : type}</span>
                               </label>
                             ))}
                           </div>
@@ -453,15 +496,21 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
 
                         <div>
                           <label className="block text-xs font-medium text-slate-700 mb-1">
-                            {contactFormData.contactType === 'email' ? 'Email Address' : 'Phone Number'}
+                            {contactFormData.contactType === 'message' ? 'Recipient' : contactFormData.contactType === 'email' ? 'Email Address' : 'Phone Number'}
                           </label>
-                          <input
-                            type={contactFormData.contactType === 'email' ? 'email' : 'tel'}
-                            value={contactFormData.contactDetails}
-                            onChange={(e) => setContactFormData({...contactFormData, contactDetails: e.target.value})}
-                            placeholder={contactFormData.contactType === 'email' ? 'official@company.com' : '+1234567890'}
-                            className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          />
+                          {contactFormData.contactType === 'message' ? (
+                            <div className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 text-sm flex items-center">
+                              {incidentNote?.viewerName ? `${incidentNote.viewerName} (${incidentNote.viewerEmail})` : 'Viewer'}
+                            </div>
+                          ) : (
+                            <input
+                              type={contactFormData.contactType === 'email' ? 'email' : 'tel'}
+                              value={contactFormData.contactDetails}
+                              onChange={(e) => setContactFormData({...contactFormData, contactDetails: e.target.value})}
+                              placeholder={contactFormData.contactType === 'email' ? 'official@company.com' : '+1234567890'}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                          )}
                         </div>
 
                         <div>

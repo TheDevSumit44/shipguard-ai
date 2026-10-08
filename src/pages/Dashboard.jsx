@@ -31,17 +31,68 @@ function dateKey(date) {
 }
 
 function buildLocalTrendData(shipments, days = 7) {
-  const safeDays = Math.max(1, days);
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (safeDays - 1));
+  if (!shipments || shipments.length === 0) {
+    // If no shipments, still return empty 7-day buckets
+    const safeDays = Math.max(1, days);
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (safeDays - 1));
+
+    const rows = [];
+    for (let i = 0; i < safeDays; i += 1) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      rows.push({
+        date: day.toLocaleDateString('en-US', { weekday: 'short' }),
+        shipments: 0,
+        atRisk: 0,
+      });
+    }
+    return rows;
+  }
+
+  // Find the earliest and latest shipment dates
+  const dates = shipments
+    .map(s => toJsDate(s.createdAt) || toJsDate(s.departureDate) || toJsDate(s.eta))
+    .filter(d => d !== null);
+
+  if (dates.length === 0) {
+    // Fallback to 7-day view if no valid dates
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 6);
+
+    const rows = [];
+    for (let i = 0; i < 7; i += 1) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      rows.push({
+        date: day.toLocaleDateString('en-US', { weekday: 'short' }),
+        shipments: 0,
+        atRisk: 0,
+      });
+    }
+    return rows;
+  }
+
+  const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  
+  // Calculate number of days between min and max, but show at least 7 days
+  minDate.setHours(0, 0, 0, 0);
+  maxDate.setHours(0, 0, 0, 0);
+  const diffMs = maxDate.getTime() - minDate.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  const displayDays = Math.max(7, Math.min(diffDays, 90)); // Show range or at least 7 days, max 90
 
   const rows = [];
   const rowsByKey = new Map();
-  for (let i = 0; i < safeDays; i += 1) {
-    const day = new Date(start);
-    day.setDate(start.getDate() + i);
+  
+  for (let i = 0; i < displayDays; i += 1) {
+    const day = new Date(minDate);
+    day.setDate(minDate.getDate() + i);
     const key = dateKey(day);
     const row = {
       date: day.toLocaleDateString('en-US', { weekday: 'short' }),
@@ -127,11 +178,18 @@ export default function Dashboard() {
 
         setRouteRecommendations(routeRecs);
 
-        const aggregateTrend = await getDailyShipmentAggregates({ days: 7, atRiskThreshold: 50 });
-        if (aggregateTrend.some((row) => row.shipments > 0)) {
-          setTrendData(aggregateTrend);
-        } else {
-          setTrendData(buildLocalTrendData(processed, 7));
+      // Always build local trend from processed shipments for immediate display
+        const localTrend = buildLocalTrendData(processed, 7);
+        
+        try {
+          // Try to get aggregate trends, but ensure local data is used as fallback
+          const aggregateTrend = await getDailyShipmentAggregates({ days: 30, atRiskThreshold: 50 });
+          // Use aggregate if it has meaningful data, otherwise use local
+          const hasAggregate = aggregateTrend && aggregateTrend.some((row) => row.shipments > 0);
+          setTrendData(hasAggregate ? aggregateTrend : localTrend);
+        } catch (e) {
+          console.warn('Failed to fetch aggregate trends:', e.message);
+          setTrendData(localTrend);
         }
       } catch (e) {
         console.error('Dashboard load error:', e);
@@ -154,12 +212,17 @@ export default function Dashboard() {
       const processed = decorateShipments(docs);
       setShipments(processed);
 
+      // Always use local trend data to ensure graphs update with actual shipment dates
+      const localTrend = buildLocalTrendData(processed, 7);
+      
       try {
-        const aggregateTrend = await getDailyShipmentAggregates({ days: 7, atRiskThreshold: 50 });
-        setTrendData(aggregateTrend.some((row) => row.shipments > 0) ? aggregateTrend : buildLocalTrendData(processed, 7));
+        // Try to get aggregate data as well, but local is the primary source
+        const aggregateTrend = await getDailyShipmentAggregates({ days: 30, atRiskThreshold: 50 });
+        const hasAggregate = aggregateTrend && aggregateTrend.some((row) => row.shipments > 0);
+        setTrendData(hasAggregate ? aggregateTrend : localTrend);
       } catch (e) {
         console.warn('Dashboard trend refresh failed:', e.message);
-        setTrendData(buildLocalTrendData(processed, 7));
+        setTrendData(localTrend);
       }
     });
 

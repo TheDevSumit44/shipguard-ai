@@ -690,19 +690,20 @@ export function subscribeToShipmentById(shipmentId, callback) {
 // Incident Resolved Notifications
 // ──────────────────────────────────────────────────────
 
-export async function createResolvedNotification(shipmentId, viewerEmail, resolvedBy) {
+export async function createResolvedNotification(shipmentId, viewerEmail, resolvedBy, metadata = {}) {
   try {
     const notificationsRef = collection(db, 'incidentNotifications');
     
     const notification = {
       shipmentId,
       viewerEmail,
-      type: 'issue_resolved',
-      title: 'Incident Resolved',
-      message: `An incident for shipment ${shipmentId} has been resolved`,
+      type: metadata.type || 'issue_resolved',
+      title: metadata.title || 'Incident Resolved',
+      message: metadata.message || `An incident for shipment ${shipmentId} has been resolved`,
       resolvedBy,
       createdAt: serverTimestamp(),
-      read: false
+      read: false,
+      ...metadata
     };
 
     const docRef = await addDoc(notificationsRef, notification);
