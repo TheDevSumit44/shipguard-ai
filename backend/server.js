@@ -1158,49 +1158,64 @@ app.get('/api/routes/geocode', geocodingLimiter, asyncHandler(async (req, res) =
 
   let result = null;
 
-  // Try Nominatim (free, no key needed)
-  try {
-    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    const nomResponse = await fetch(nomUrl, {
-      headers: {
-        'User-Agent': 'ShipGuardAI/1.0 (routing-geocoder)',
-        Accept: 'application/json',
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+  // Try Nominatim with retry logic
+  async function tryNominatim() {
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const nomResponse = await fetch(nomUrl, {
+          headers: {
+            'User-Agent': 'ShipGuardAI/1.0 (routing-geocoder)',
+            Accept: 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-    if (!nomResponse.ok) {
-      console.warn(`[Geocoding] Nominatim returned ${nomResponse.status}, attempting fallback...`);
-      // Return empty result instead of 503 - frontend will handle gracefully
-      res.json([]);
-      return;
+        if (nomResponse.ok) {
+          const nomData = await nomResponse.json();
+          if (Array.isArray(nomData) && nomData.length > 0) {
+            result = [
+              {
+                name: city,
+                lat: Number(nomData[0].lat),
+                lon: Number(nomData[0].lon),
+                displayName: nomData[0].display_name,
+              },
+            ];
+            
+            // Cache for 24 hours
+            geocodingCache.set(cacheKey, result);
+            return true;
+          }
+        } else if (nomResponse.status === 429 || nomResponse.status === 503) {
+          // Rate limited or service unavailable - retry with backoff
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+            console.warn(`[Geocoding] Attempt ${attempt} failed (${nomResponse.status}), retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+      } catch (err) {
+        console.error(`[Geocoding] Attempt ${attempt} error: ${err.message}`);
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
     }
-
-    const nomData = await nomResponse.json();
-    if (Array.isArray(nomData) && nomData.length > 0) {
-      result = [
-        {
-          name: city,
-          lat: Number(nomData[0].lat),
-          lon: Number(nomData[0].lon),
-          displayName: nomData[0].display_name,
-        },
-      ];
-      
-      // Cache for 24 hours
-      geocodingCache.set(cacheKey, result);
-    }
-  } catch (err) {
-    console.error(`[Geocoding] Error: ${err.message}`);
-    // Return empty result on error instead of 503 - graceful fallback
-    res.json([]);
-    return;
+    return false;
   }
 
+  const success = await tryNominatim();
+  
+  // Return result (empty if all retries failed)
   res.json(result || []);
 }));
 
