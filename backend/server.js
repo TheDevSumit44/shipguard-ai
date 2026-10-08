@@ -354,7 +354,7 @@ function validateStartupConfiguration() {
   if (adminEmails.length === 0) {
     console.warn('[Startup] VITE_ADMIN_EMAILS is empty - no admin emails configured');
   } else {
-    console.log(`[Startup] Admin whitelist: ${adminEmails.join(', ')}`);
+    // Admin emails configured but not logged for security (prevents email exposure in logs)
   }
 
   return { errors, warnings };
