@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, MapPin, Clock, AlertTriangle, Save, Loader, Phone, Mail, Send, Check } from 'lucide-react';
+import { X, MapPin, Clock, AlertTriangle, Save, Loader, Phone, Mail, Send, Check, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { updateShipment, getShipmentById, createResolvedNotification } from '../services/firestoreService';
+import { updateShipment, getShipmentById, createResolvedNotification, deleteIncidentNote } from '../services/firestoreService';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { getAdminRiskOverrideData } from '../lib/riskScoreCalculator';
@@ -34,6 +34,8 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [updateFormData, setUpdateFormData] = useState({
     status: '',
@@ -174,6 +176,26 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
       toast.error('Failed to mark incident as resolved');
     } finally {
       setResolving(false);
+    }
+  };
+
+  const handleDeleteIncident = async () => {
+    if (!incidentNote?.id) {
+      toast.error('Cannot delete: Incident ID not found');
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteIncidentNote(shipmentId, incidentNote.id);
+      toast.success('Incident report deleted successfully');
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('Failed to delete incident:', error);
+      toast.error('Failed to delete incident report');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -353,6 +375,13 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                             Mark as Resolved
                           </>
                         )}
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Incident
                       </button>
                     </div>
 
@@ -549,6 +578,74 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
           </motion.div>
         </>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDeleteConfirm(false)}
+              className="fixed inset-0 bg-black/30 z-40"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="bg-white rounded-2xl shadow-lg max-w-sm w-full">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center">
+                      <AlertTriangle className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Delete Incident Report?</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-sm text-slate-700">
+                      Are you sure you want to delete this incident report? The record will be permanently removed from the system.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-medium text-sm transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteIncident}
+                      disabled={deleting}
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      {deleting ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4" />
+                          Delete Permanently
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 }

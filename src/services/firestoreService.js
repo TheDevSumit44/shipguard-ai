@@ -770,3 +770,33 @@ export async function markNotificationAsRead(notificationId) {
     throw e;
   }
 }
+
+// ──────────────────────────────────────────────────────
+// Delete Incident Notes
+// ──────────────────────────────────────────────────────
+
+export async function deleteIncidentNote(shipmentId, noteId) {
+  try {
+    const noteRef = doc(db, 'shipments', shipmentId, 'notes', noteId);
+    await deleteDoc(noteRef);
+    return true;
+  } catch (e) {
+    console.error('Failed to delete incident note:', e);
+    throw e;
+  }
+}
+
+export async function deleteAllIncidentNotes(shipmentId) {
+  try {
+    const notesRef = collection(db, 'shipments', shipmentId, 'notes');
+    const snap = await getDocs(notesRef);
+    
+    const deletePromises = snap.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    return snap.docs.length;
+  } catch (e) {
+    console.error('Failed to delete all incident notes:', e);
+    throw e;
+  }
+}
