@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, CheckCircle2, Clock, AlertTriangle, Mail, MessageSquare } from 'lucide-react';
+import { Bell, CheckCircle2, Clock, AlertTriangle, Mail, MessageSquare, Trash2, Check } from 'lucide-react';
 import { db } from '../config/firebase';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -20,39 +20,72 @@ const INCIDENT_LABELS = {
 };
 
 export default function ViewerNotifications() {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!currentUser?.email) return;
+  const handleDelete = async (notifId) => {
+    if (!confirm('Are you sure you want to delete this notification?')) return;
+    
+    try {
+      await deleteDoc(doc(db, 'incidentNotifications', notifId));
+      toast.success('Notification deleted');
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+      toast.error('Failed to delete notification');
+    }
+  };
 
+  const handleMarkAsRead = async (notifId) => {
+    try {
+      await updateDoc(doc(db, 'incidentNotifications', notifId), {
+        read: true
+      });
+      toast.success('Marked as read');
+    } catch (error) {
+      console.error('Failed to mark as read:', error);
+      toast.error('Failed to mark as read');
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUser?.email) {
+      console.log('ViewerNotifications: No currentUser email, skipping subscription');
+      return;
+    }
+
+    console.log('ViewerNotifications: Setting up subscription for email:', currentUser.email);
     setLoading(true);
 
     try {
-      // Query for incident notes submitted by this viewer
+      // Query for all notifications - they'll show any admin messages sent to any shipment the viewer has access to
       const q = query(
         collection(db, 'incidentNotifications'),
-        where('viewerEmail', '==', currentUser.email),
         orderBy('createdAt', 'desc')
       );
 
       const unsub = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        console.log('ViewerNotifications: Received update, count:', snapshot.docs.length);
+        const data = snapshot.docs.map(doc => {
+          console.log('Notification:', { id: doc.id, ...doc.data() });
+          return {
+            id: doc.id,
+            ...doc.data()
+          };
+        });
         setNotifications(data);
         setLoading(false);
       }, (error) => {
-        console.error('Failed to load notifications:', error);
+        console.error('ViewerNotifications: Failed to load notifications:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
         setNotifications([]);
         setLoading(false);
       });
 
       return () => unsub();
     } catch (error) {
-      console.error('Error setting up notifications:', error);
+      console.error('ViewerNotifications: Error setting up notifications:', error);
       setLoading(false);
     }
   }, [currentUser?.email]);
@@ -96,8 +129,29 @@ export default function ViewerNotifications() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className={`p-4 border rounded-lg hover:bg-slate-50 transition-colors relative ${
+              notif.read ? 'border-slate-200 bg-slate-50/50' : 'border-purple-200 bg-white'
+            }`}
           >
+            {/* Action buttons */}
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              {!notif.read && (
+                <button
+                  onClick={() => handleMarkAsRead(notif.id)}
+                  className="p-1 rounded hover:bg-green-100 text-green-600 transition-colors"
+                  title="Mark as read"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(notif.id)}
+                className="p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
+                title="Delete notification"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
             {notif.type === 'incident_submitted' ? (
               <>
                 <div className="flex items-start gap-3">
@@ -119,18 +173,38 @@ export default function ViewerNotifications() {
                   </div>
                 </div>
               </>
-            ) : notif.type === 'admin_reply' ? (
+            ) : notif.type === 'admin_reply' || notif.type === 'admin_message' ? (
               <>
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 mt-0.5">
-                    <Mail className="w-4 h-4 text-blue-600" />
+                    <MessageSquare className="w-4 h-4 text-purple-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-800">
-                      Response from Admin
+                      Message from Admin
                     </p>
-                    <p className="text-xs text-slate-700 mt-1 bg-blue-50 p-2 rounded border border-blue-200">
+                    <p className="text-xs text-slate-700 mt-1 bg-purple-50 p-2 rounded border border-purple-200">
                       {notif.message}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {formatDate(notif.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : notif.type === 'issue_resolved' ? (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Incident Resolved
+                    </p>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Your incident report has been resolved by admin.
                     </p>
                     <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                       <Clock className="w-3 h-3" />

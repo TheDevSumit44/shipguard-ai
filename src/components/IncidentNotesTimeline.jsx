@@ -1,6 +1,10 @@
-import { AlertTriangle, Clock, MapPin, Clock as ClockIcon, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Clock, MapPin, Clock as ClockIcon, ChevronRight, Trash2, Mail, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { deleteIncidentNote, subscribeToIncidentNotifications } from '../services/firestoreService';
+import ViewerMessageModal from './ViewerMessageModal';
+import toast from 'react-hot-toast';
+import { useState, useEffect } from 'react';
 
 const INCIDENT_LABELS = {
   fuel_shortage: 'Fuel Shortage',
@@ -37,7 +41,70 @@ const SEVERITY_DOT = {
 };
 
 export default function IncidentNotesTimeline({ notes = [], loading = false, showHeader = true, shipmentId = null, onAdminViewDetails = null }) {
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser } = useAuth();
+  const [unreadMessages, setUnreadMessages] = useState({});
+  const [hasMessages, setHasMessages] = useState({});
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  
+  // Subscribe to incident notifications to track messages
+  useEffect(() => {
+    if (!currentUser?.email) {
+      console.log('IncidentNotesTimeline: No current user email');
+      return;
+    }
+
+    console.log('IncidentNotesTimeline: Setting up subscription for', currentUser.email);
+
+    const unsub = subscribeToIncidentNotifications(currentUser.email, (notifications) => {
+      console.log('IncidentNotesTimeline: Received notifications:', notifications.length);
+      const unread = {};
+      const msgs = {};
+      
+      notifications.forEach(notif => {
+        console.log('Checking notification:', { type: notif.type, shipmentId: notif.shipmentId });
+        if (notif.type === 'admin_message' && notif.shipmentId) {
+          unread[notif.shipmentId] = !notif.read;
+          msgs[notif.shipmentId] = true; // Has messages
+        }
+      });
+      
+      console.log('Updated unread:', unread, 'hasMessages:', msgs);
+      setUnreadMessages(unread);
+      setHasMessages(msgs);
+    });
+
+    return () => unsub();
+  }, [currentUser?.email]);
+  
+  const handleDeleteNote = async (e, noteId) => {
+    e.stopPropagation();
+    
+    if (!confirm('Are you sure you want to delete this incident report? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      console.log('Delete initiated:', { userRole: userProfile?.role, shipmentId, noteId });
+      await deleteIncidentNote(shipmentId, noteId);
+      toast.success('Incident report deleted');
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        userRole: userProfile?.role,
+        shipmentId,
+        noteId
+      });
+      
+      if (error.code === 'permission-denied') {
+        toast.error('Permission denied: You must be an admin to delete incident reports');
+      } else {
+        toast.error(`Failed to delete incident report: ${error.message}`);
+      }
+    }
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown date';
     
@@ -131,9 +198,36 @@ export default function IncidentNotesTimeline({ notes = [], loading = false, sho
               </div>
 
               {/* Note Content */}
-              <div className={`flex-1 p-4 rounded-xl border ${severityColor} ${userProfile?.role === 'admin' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+              <div className={`flex-1 p-4 rounded-xl border ${severityColor} ${userProfile?.role === 'admin' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} relative`}
                 onClick={() => userProfile?.role === 'admin' && onAdminViewDetails && onAdminViewDetails(note)}
               >
+                {/* Message Inbox Icon for Viewers AND Admins */}
+                {(userProfile?.role === 'viewer' || userProfile?.role === 'admin') && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMessageModal(true);
+                    }}
+                    title={userProfile?.role === 'admin' ? 'View sent messages' : 'View admin messages'}
+                    className={`absolute top-3 p-1.5 rounded-lg hover:bg-purple-50 text-purple-600 hover:text-purple-700 transition-colors border border-purple-200 ${
+                      userProfile?.role === 'admin' ? 'right-12' : 'right-3'
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* Delete Icon for Admin - positioned at far right */}
+                {userProfile?.role === 'admin' && (
+                  <button
+                    onClick={(e) => handleDeleteNote(e, note.id)}
+                    title="Delete incident report"
+                    className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors border border-slate-200"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex-1 min-w-0">
@@ -200,6 +294,17 @@ export default function IncidentNotesTimeline({ notes = [], loading = false, sho
           );
         })}
       </div>
+
+      {/* Message Modal for Viewers AND Admins */}
+      {(userProfile?.role === 'viewer' || userProfile?.role === 'admin') && (
+        <ViewerMessageModal 
+          isOpen={showMessageModal} 
+          onClose={() => setShowMessageModal(false)}
+          shipmentId={shipmentId}
+          viewerEmail={currentUser?.email}
+          isAdmin={userProfile?.role === 'admin'}
+        />
+      )}
     </motion.div>
   );
 }

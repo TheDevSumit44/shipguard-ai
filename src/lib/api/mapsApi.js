@@ -79,8 +79,11 @@ export async function getAlternativeRoutes({ origin, destination, mode = 'road' 
   }
 
   try {
-    // OSRM endpoint is road-network based; use road mode consistently.
-    const payload = { origin: safeOrigin, destination: safeDestination, mode: 'road', requestedMode: mode };
+    // Pass the actual mode to backend - it will route accordingly
+    // Land modes (road/rail) -> OSRM
+    // Sea mode -> SeaRoutes API with Great Circle fallback
+    // Air mode -> Great Circle calculation
+    const payload = { origin: safeOrigin, destination: safeDestination, requestedMode: mode };
 
     const res = await fetchWithRetry(`${BACKEND_URL}/api/routes/alternatives`, {
       method: 'POST',

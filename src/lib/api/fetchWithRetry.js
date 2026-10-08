@@ -2,6 +2,8 @@ const DEFAULT_RETRY_ATTEMPTS = Math.max(0, Number(import.meta.env.VITE_API_RETRY
 const DEFAULT_RETRY_DELAY_MS = Math.max(100, Number(import.meta.env.VITE_API_RETRY_DELAY_MS) || 350);
 const DEFAULT_TIMEOUT_MS = Math.max(1000, Number(import.meta.env.VITE_API_TIMEOUT_MS) || 12000);
 
+import { addCsrfToHeaders } from '../csrf.js';
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -15,6 +17,10 @@ export async function fetchWithRetry(url, options = {}) {
   const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : DEFAULT_RETRY_DELAY_MS;
   const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : DEFAULT_TIMEOUT_MS;
 
+  // Add CSRF token to headers for state-changing requests
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = await addCsrfToHeaders(options.headers || {}, method);
+
   let lastError;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -24,6 +30,8 @@ export async function fetchWithRetry(url, options = {}) {
     try {
       const res = await fetch(url, {
         ...options,
+        method,
+        headers,
         signal: controller.signal,
       });
       clearTimeout(timer);

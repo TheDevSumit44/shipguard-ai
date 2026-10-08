@@ -25,8 +25,18 @@ const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const DEFAULT_NOTIFICATIONS = { email: true, push: true, sms: false };
 const DEFAULT_PREFERENCES = { riskThreshold: 60, slaWarningHours: 48, digestTime: '08:00' };
 const DEFAULT_INTEGRATIONS = { weatherApiKey: '', mapsApiKey: '', newsApiKey: '' };
-const ADMIN_EMAIL_WHITELIST = ['shirotprusty4444@gmail.com'];
+const ADMIN_EMAIL_WHITELIST = (
+  import.meta.env.VITE_ADMIN_EMAILS || ''
+).split(',').map(e => e.trim()).filter(Boolean);
 const DEFAULT_ROLE = 'viewer';
+
+// ═══ ISSUE #26: ADMIN WHITELIST LOGGING ═══
+// Log admin configuration status for visibility
+if (ADMIN_EMAIL_WHITELIST.length === 0) {
+  console.warn('[Auth] VITE_ADMIN_EMAILS is empty or not configured. No admin users will be available.');
+} else {
+  console.log(`[Auth] Admin whitelist configured with ${ADMIN_EMAIL_WHITELIST.length} email(s): ${ADMIN_EMAIL_WHITELIST.join(', ')}`);
+}
 
 function isLikelyMobileBrowser() {
   if (typeof navigator === 'undefined') return false;
@@ -220,13 +230,14 @@ export function AuthProvider({ children }) {
     }
     markActivity();
 
-    const useRedirectFlow = false;
+    // ═══ ISSUE #22: REMOVED DEAD CODE ═══
+    // Removed: const useRedirectFlow = false;
+    // Removed: if (!useRedirectFlow) { ... } - always uses popup, never uses redirect
 
     try {
-      if (!useRedirectFlow) {
-        const cred = await signInWithPopup(auth, googleProvider);
-        localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-        localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
+      const cred = await signInWithPopup(auth, googleProvider);
+      localStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+      localStorage.removeItem(AUTH_REDIRECT_PENDING_AT_KEY);
         
         // SECURITY: Check if user requested admin role but is not whitelisted
         if (role === 'admin' && !ADMIN_EMAIL_WHITELIST.includes(cred.user.email)) {
@@ -262,10 +273,6 @@ export function AuthProvider({ children }) {
         }
 
         return { method: 'popup', user: cred.user };
-      }
-
-      await signInWithRedirect(auth, googleProvider);
-      return { method: 'redirect' };
     } catch (e) {
       if (e.code === 'auth/role-mismatch') {
         setAuthError(e.message);

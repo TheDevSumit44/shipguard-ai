@@ -83,8 +83,10 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
     if (!formData.viewerEmail || formData.viewerEmail.trim().length === 0) {
       newErrors.viewerEmail = 'Email is required (auto-filled from your account)';
     }
-    if (formData.viewerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.viewerEmail)) {
-      newErrors.viewerEmail = 'Invalid email format';
+    // ═══ ISSUE #21: STRICTER EMAIL VALIDATION ═══
+    // Validate email format with proper TLD requirement (min 2 chars)
+    if (formData.viewerEmail && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.viewerEmail)) {
+      newErrors.viewerEmail = 'Invalid email format (must have valid domain with TLD)';
     }
     if (!formData.incidentType) {
       newErrors.incidentType = 'Incident type is required';

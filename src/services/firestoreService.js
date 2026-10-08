@@ -297,18 +297,71 @@ export async function addAlert(data) {
   });
 }
 
+// ═══ ISSUE #30: GRANULAR AUDIT LOGGING FOR ALERT CHANGES ═══
+/**
+ * Update an alert with audit logging
+ * @param {string} id - Alert ID
+ * @param {Object} data - Data to update
+ * @returns {Promise<void>}
+ */
 export async function updateAlert(id, data) {
+  const oldDoc = await getDoc(doc(db, 'alerts', id));
+  const oldData = oldDoc.exists() ? oldDoc.data() : {};
+  
+  // Log to audit trail
+  console.log(`[Audit] Alert ${id} updated: ${JSON.stringify({
+    oldStatus: oldData.status,
+    newStatus: data.status,
+    oldSeverity: oldData.severity,
+    newSeverity: data.severity,
+    userId: auth.currentUser?.uid
+  })}`);
+  
   return updateDoc(doc(db, 'alerts', id), { ...data, updatedAt: serverTimestamp() });
 }
 
+/**
+ * Acknowledge an alert with audit logging
+ * @param {string} id - Alert ID
+ * @returns {Promise<void>}
+ */
 export async function acknowledgeAlert(id) {
+  const oldDoc = await getDoc(doc(db, 'alerts', id));
+  const oldStatus = oldDoc.data()?.status || 'unknown';
+  
+  // Log to audit trail
+  console.log(`[Audit] Alert ${id} acknowledged: ${JSON.stringify({
+    previousStatus: oldStatus,
+    newStatus: 'acknowledged',
+    userId: auth.currentUser?.uid,
+    timestamp: new Date().toISOString()
+  })}`);
+  
   return updateDoc(doc(db, 'alerts', id), {
     status: 'acknowledged',
     acknowledgedAt: serverTimestamp(),
   });
 }
 
+/**
+ * Resolve an alert with audit logging
+ * @param {string} id - Alert ID
+ * @param {string} resolution - Resolution details
+ * @returns {Promise<void>}
+ */
 export async function resolveAlert(id, resolution) {
+  const oldDoc = await getDoc(doc(db, 'alerts', id));
+  const oldStatus = oldDoc.data()?.status || 'unknown';
+  
+  // Log to audit trail
+  console.log(`[Audit] Alert ${id} resolved: ${JSON.stringify({
+    previousStatus: oldStatus,
+    newStatus: 'resolved',
+    resolution,
+    userId: auth.currentUser?.uid,
+    timestamp: new Date().toISOString()
+  })}`);
+  
   return updateDoc(doc(db, 'alerts', id), {
     status: 'resolved',
     resolution,
