@@ -1168,7 +1168,7 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
   }
 
   const { id } = req.params;
-  const { text, incidentType, severity, location, estimatedDelay } = req.body;
+  const { text, incidentType, severity, location, estimatedDelay, viewerName, viewerEmail } = req.body;
 
   // Validate note data
   const { error, value } = noteSchema.validate({
@@ -1182,6 +1182,17 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
   if (error) {
     const messages = error.details.map(d => d.message).join('; ');
     res.status(400).json({ error: `Validation failed: ${messages}` });
+    return;
+  }
+
+  // Validate viewer details
+  if (!viewerName || viewerName.trim().length === 0) {
+    res.status(400).json({ error: 'Viewer name is required' });
+    return;
+  }
+
+  if (!viewerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(viewerEmail)) {
+    res.status(400).json({ error: 'Valid viewer email is required' });
     return;
   }
 
@@ -1202,6 +1213,8 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
       text: value.text,
       incidentType: value.incidentType,
       severity: value.severity,
+      viewerName: viewerName.trim(),
+      viewerEmail: viewerEmail.trim(),
       location: value.location || null,
       estimatedDelay: value.estimatedDelay || 0,
       createdBy: req.auth?.uid || 'system',
@@ -1211,6 +1224,20 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
 
     // Add note to subcollection
     const noteRef = await shipmentRef.collection('notes').add(noteData);
+
+    // Create viewer notification record
+    const notifData = {
+      type: 'incident_submitted',
+      viewerName: viewerName.trim(),
+      viewerEmail: viewerEmail.trim(),
+      incidentType: value.incidentType,
+      shipmentId: id,
+      trackingId: shipmentData.trackingId,
+      noteId: noteRef.id,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('incidentNotifications').add(notifData);
 
     // Create alert for admin
     const alertData = {

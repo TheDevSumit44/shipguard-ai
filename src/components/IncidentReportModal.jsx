@@ -27,6 +27,8 @@ const SEVERITY_LEVELS = [
 export default function IncidentReportModal({ isOpen, onClose, shipmentId, trackingId, fromNotification = false }) {
   const [formData, setFormData] = useState({
     shipmentId: shipmentId || '',
+    viewerName: '',
+    viewerEmail: '',
     incidentType: '',
     severity: '',
     text: '',
@@ -61,6 +63,15 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
 
     if (!formData.shipmentId) {
       newErrors.shipmentId = 'Shipment ID is required';
+    }
+    if (!formData.viewerName || formData.viewerName.trim().length === 0) {
+      newErrors.viewerName = 'Your name is required';
+    }
+    if (!formData.viewerEmail || formData.viewerEmail.trim().length === 0) {
+      newErrors.viewerEmail = 'Your email is required';
+    }
+    if (formData.viewerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.viewerEmail)) {
+      newErrors.viewerEmail = 'Please enter a valid email address';
     }
     if (!formData.incidentType) {
       newErrors.incidentType = 'Incident type is required';
@@ -105,6 +116,8 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
         text: formData.text.trim(),
         incidentType: formData.incidentType,
         severity: formData.severity,
+        viewerName: formData.viewerName.trim(),
+        viewerEmail: formData.viewerEmail.trim(),
         location: (formData.location.lat || formData.location.lng) ? formData.location : undefined,
         estimatedDelay: formData.estimatedDelay ? parseInt(formData.estimatedDelay) : undefined
       };
@@ -114,6 +127,8 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
       toast.success('Incident report submitted successfully');
       setFormData({
         shipmentId: shipmentId || '',
+        viewerName: '',
+        viewerEmail: '',
         incidentType: '',
         severity: '',
         text: '',
@@ -194,6 +209,49 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
                     )}
                   </div>
                 )}
+
+                {/* Viewer Information */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="viewerName" className="block text-sm font-semibold text-slate-700 mb-2">
+                      Your Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="viewerName"
+                      name="viewerName"
+                      type="text"
+                      value={formData.viewerName}
+                      onChange={handleInputChange}
+                      placeholder="Enter your name..."
+                      className={`w-full px-4 py-2.5 rounded-lg border ${
+                        errors.viewerName ? 'border-red-300' : 'border-slate-200'
+                      } bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all`}
+                    />
+                    {errors.viewerName && (
+                      <p className="mt-1 text-xs text-red-600">{errors.viewerName}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="viewerEmail" className="block text-sm font-semibold text-slate-700 mb-2">
+                      Your Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="viewerEmail"
+                      name="viewerEmail"
+                      type="email"
+                      value={formData.viewerEmail}
+                      onChange={handleInputChange}
+                      placeholder="your.email@company.com"
+                      className={`w-full px-4 py-2.5 rounded-lg border ${
+                        errors.viewerEmail ? 'border-red-300' : 'border-slate-200'
+                      } bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all`}
+                    />
+                    {errors.viewerEmail && (
+                      <p className="mt-1 text-xs text-red-600">{errors.viewerEmail}</p>
+                    )}
+                  </div>
+                </div>
 
                 {/* Incident Type */}
                 <div>
