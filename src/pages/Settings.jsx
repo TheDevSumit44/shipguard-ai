@@ -91,8 +91,11 @@ export default function Settings() {
   const tabs = [
     { id: 'account', label: 'Account', icon: User, subtitle: 'Profile and access' },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'integrations', label: 'Integrations', icon: Key },
-    { id: 'preferences', label: 'Preferences', icon: Monitor },
+    // These tabs are admin-only
+    ...(userProfile?.role === 'admin' ? [
+      { id: 'integrations', label: 'Integrations', icon: Key },
+      { id: 'preferences', label: 'Preferences', icon: Monitor },
+    ] : []),
   ];
 
   return (
@@ -293,8 +296,8 @@ export default function Settings() {
             </div>
           )}
 
-          {/* API Keys / Integrations */}
-          {activeTab === 'integrations' && (
+          {/* API Keys / Integrations - Admin Only */}
+          {activeTab === 'integrations' && userProfile?.role === 'admin' && (
             <div className="space-y-4">
               <div className="stat-card space-y-2">
                 <h3 className="text-lg font-semibold text-slate-800">API Integrations</h3>
@@ -324,8 +327,8 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Preferences */}
-          {activeTab === 'preferences' && (
+          {/* Preferences - Admin Only */}
+          {activeTab === 'preferences' && userProfile?.role === 'admin' && (
             <div className="space-y-4">
               <div className="stat-card space-y-2">
                 <h3 className="text-lg font-semibold text-slate-800">Operational Preferences</h3>
