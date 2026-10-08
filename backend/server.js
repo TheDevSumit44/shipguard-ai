@@ -12,7 +12,7 @@ import morgan from 'morgan';
 import Joi from 'joi';
 import csurf from 'csurf';
 import admin from 'firebase-admin';
-import { LRU } from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import xss from 'xss';
 
 function parseEnvFile(filePath) {
@@ -81,7 +81,7 @@ const allowedOrigins = (env.ALLOWED_ORIGINS || 'http://localhost:3000,http://127
 
 // â•â•â• ISSUE #12: GEOCODING CACHE WITH LRU â•â•â•
 // LRU cache: 1000 items, 24h TTL
-const geocodingCache = new LRU({
+const geocodingCache = new LRUCache({
   max: 1000,
   ttl: 24 * 60 * 60 * 1000,
 });
