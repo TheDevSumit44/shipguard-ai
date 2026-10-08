@@ -54,7 +54,8 @@ service cloud.firestore {
       match /notes/{noteId} {
         allow read: if signedIn();
         allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isAdmin();
       }
     }
 
@@ -79,6 +80,13 @@ service cloud.firestore {
     match /audit_logs/{id} {
       allow read: if isAdmin();
       allow write: if false;
+    }
+
+    match /incidentNotifications/{id} {
+      allow read: if signedIn() && request.auth.uid != null;
+      allow create: if isAdmin();
+      allow update: if signedIn();
+      allow delete: if isAdmin();
     }
 
     match /webhook_retry_queue/{id} {
