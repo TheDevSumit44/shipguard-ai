@@ -1174,7 +1174,9 @@ app.get('/api/routes/geocode', geocodingLimiter, asyncHandler(async (req, res) =
     clearTimeout(timeoutId);
 
     if (!nomResponse.ok) {
-      res.status(503).json({ error: 'Geocoding service temporarily unavailable - please retry' });
+      console.warn(`[Geocoding] Nominatim returned ${nomResponse.status}, attempting fallback...`);
+      // Return empty result instead of 503 - frontend will handle gracefully
+      res.json([]);
       return;
     }
 
@@ -1194,7 +1196,8 @@ app.get('/api/routes/geocode', geocodingLimiter, asyncHandler(async (req, res) =
     }
   } catch (err) {
     console.error(`[Geocoding] Error: ${err.message}`);
-    res.status(503).json({ error: `Geocoding service error: ${err.message}` });
+    // Return empty result on error instead of 503 - graceful fallback
+    res.json([]);
     return;
   }
 
