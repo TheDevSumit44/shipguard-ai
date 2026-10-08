@@ -1547,6 +1547,15 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
   const { id } = req.params;
   const { text, incidentType, severity, location, estimatedDelay, viewerEmail, viewerName } = req.body;
 
+  // DEBUG: Log received data
+  console.log('📝 Creating incident note:', {
+    shipmentId: id,
+    viewerEmail,
+    viewerName,
+    incidentType,
+    severity
+  });
+
   // Validate note data
   const { error, value } = noteSchema.validate({
     text,
@@ -1590,6 +1599,12 @@ app.post('/api/shipments/:id/notes', apiLimiter, asyncHandler(async (req, res) =
 
     // Add note to subcollection
     const noteRef = await shipmentRef.collection('notes').add(noteData);
+
+    console.log('✅ Note created successfully:', {
+      noteId: noteRef.id,
+      viewerEmail: noteData.viewerEmail,
+      viewerName: noteData.viewerName
+    });
 
     // Create alert for admin
     const alertData = {

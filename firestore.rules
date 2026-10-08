@@ -56,7 +56,7 @@ service cloud.firestore {
       // Notes subcollection - for viewer incident reports
       match /notes/{noteId} {
         allow read: if signedIn();
-        allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+        allow create: if signedIn() || isBackendServiceAccount();
         allow update: if false;
         allow delete: if isAdmin();
       }

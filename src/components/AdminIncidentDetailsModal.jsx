@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, MapPin, Clock, AlertTriangle, Save, Loader, Phone, Mail, Send, Check, Trash2 } from 'lucide-react';
+import { X, MapPin, Clock, AlertTriangle, Save, Loader, Phone, Mail, Send, Check, Trash2, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { updateShipment, getShipmentById, createResolvedNotification, deleteIncidentNote } from '../services/firestoreService';
 import toast from 'react-hot-toast';
@@ -265,47 +265,72 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                   </div>
                 ) : (
                   <>
-                    {/* Viewer Information */}
-                    {incidentNote.viewerName && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                        <p className="text-xs font-semibold text-blue-700 mb-1">Reported By</p>
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-medium text-slate-800">{incidentNote.viewerName}</p>
-                          <p className="text-xs text-slate-600">{incidentNote.viewerEmail}</p>
+                    {/* Two-column layout: Reported By + Incident Details */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                      {/* Reported By - takes 1 column */}
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-4 shadow-sm">
+                        <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-3">Reported By</p>
+                        <div className="space-y-2">
+                          {incidentNote.viewerName ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                <p className="text-sm font-semibold text-slate-800">{incidentNote.viewerName}</p>
+                              </div>
+                              <div className="flex items-center gap-2 pl-3.5">
+                                <p className="text-xs text-slate-600 break-all">{incidentNote.viewerEmail || 'Email not available'}</p>
+                              </div>
+                            </>
+                          ) : incidentNote.viewerEmail ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              <p className="text-sm font-semibold text-slate-800 break-all">{incidentNote.viewerEmail}</p>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic">Information not available</p>
+                          )}
                         </div>
                       </div>
-                    )}
 
-                    {/* Incident Details */}
-                    <div className={`p-3 rounded-lg border-2 ${SEVERITY_COLORS[incidentNote.severity]} mb-3`}>
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-xs font-semibold opacity-75 mb-1">Severity</p>
-                          <p className="text-sm font-bold capitalize">{incidentNote.severity}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold opacity-75 mb-1">Description</p>
-                          <p className="text-sm">{incidentNote.text}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          {incidentNote.location && (
-                            <div className="flex items-start gap-2">
-                              <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                              <div>
-                                <p className="text-xs opacity-75">Location</p>
-                                <p className="text-sm font-medium">
-                                  {incidentNote.location.lat?.toFixed(4)}, {incidentNote.location.lng?.toFixed(4)}
-                                </p>
-                              </div>
+                      {/* Incident Details - takes 2 columns */}
+                      <div className={`lg:col-span-2 p-4 rounded-xl border-2 shadow-sm ${SEVERITY_COLORS[incidentNote.severity]}`}>
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3 pb-2 border-b border-current/20">
+                            <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-xs font-bold opacity-75">Severity Level</p>
+                              <p className="text-base font-normal capitalize">{incidentNote.severity}</p>
                             </div>
-                          )}
-                          {incidentNote.estimatedDelay > 0 && (
-                            <div className="flex items-start gap-2">
-                              <Clock className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                              <div>
-                                <p className="text-xs opacity-75">Est. Delay</p>
-                                <p className="text-sm font-medium">+{incidentNote.estimatedDelay} hours</p>
-                              </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <FileText className="w-5 h-5 mt-0.5 flex-shrink-0 opacity-75" />
+                            <div className="flex-1">
+                              <p className="text-xs font-bold opacity-75">Description</p>
+                              <p className="text-sm leading-relaxed font-normal">{incidentNote.text}</p>
+                            </div>
+                          </div>
+                          {(incidentNote.location || incidentNote.estimatedDelay > 0) && (
+                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-current/20">
+                              {incidentNote.location && (
+                                <div className="flex items-start gap-2">
+                                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 opacity-75" />
+                                  <div>
+                                    <p className="text-xs opacity-75">Location</p>
+                                    <p className="text-xs font-semibold">
+                                      {incidentNote.location.lat?.toFixed(4)}, {incidentNote.location.lng?.toFixed(4)}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                              {incidentNote.estimatedDelay > 0 && (
+                                <div className="flex items-start gap-2">
+                                  <Clock className="w-4 h-4 mt-0.5 flex-shrink-0 opacity-75" />
+                                  <div>
+                                    <p className="text-xs opacity-75 font-medium">Est. Delay</p>
+                                    <p className="text-xs font-semibold">+{incidentNote.estimatedDelay} hours</p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -521,8 +546,8 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                             {contactFormData.contactType === 'message' ? 'Recipient (Viewer Email)' : 'Phone Number'}
                           </label>
                           {contactFormData.contactType === 'message' ? (
-                            <div className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 text-xs flex items-center">
-                              {incidentNote?.viewerEmail || 'Viewer email not found'}
+                            <div className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 text-sm flex items-center">
+                              {incidentNote?.viewerName ? `${incidentNote.viewerName} (${incidentNote.viewerEmail})` : incidentNote?.viewerEmail || 'Viewer email not found'}
                             </div>
                           ) : (
                             <input
