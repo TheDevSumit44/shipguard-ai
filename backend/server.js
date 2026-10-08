@@ -1196,13 +1196,13 @@ app.get('/api/routes/geocode', geocodingLimiter, asyncHandler(async (req, res) =
           // Rate limited or service unavailable - retry with backoff
           if (attempt < maxRetries) {
             const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-            console.warn(`[Geocoding] Attempt ${attempt} failed (${nomResponse.status}), retrying in ${delay}ms...`);
+            console.warn(`[Geocoding] Nominatim attempt ${attempt} failed (${nomResponse.status}), retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
         }
       } catch (err) {
-        console.error(`[Geocoding] Attempt ${attempt} error: ${err.message}`);
+        console.error(`[Geocoding] Nominatim attempt ${attempt} error: ${err.message}`);
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000;
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -1213,9 +1213,58 @@ app.get('/api/routes/geocode', geocodingLimiter, asyncHandler(async (req, res) =
     return false;
   }
 
-  const success = await tryNominatim();
+  // Fallback: Try Google Maps API
+  async function tryGoogleMaps() {
+    const googleMapsKey = env.GOOGLE_MAPS_API_KEY;
+    if (!googleMapsKey) {
+      console.warn('[Geocoding] Google Maps API key not configured');
+      return false;
+    }
+
+    try {
+      const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(city)}&key=${googleMapsKey}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const googleResponse = await fetch(googleUrl, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (googleResponse.ok) {
+        const googleData = await googleResponse.json();
+        if (googleData.results && googleData.results.length > 0) {
+          const location = googleData.results[0].geometry.location;
+          result = [
+            {
+              name: city,
+              lat: location.lat,
+              lon: location.lng,
+              displayName: googleData.results[0].formatted_address,
+            },
+          ];
+
+          // Cache for 24 hours
+          geocodingCache.set(cacheKey, result);
+          console.log(`[Geocoding] ✅ Google Maps geocoding succeeded for "${city}"`);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error(`[Geocoding] Google Maps error: ${err.message}`);
+    }
+
+    return false;
+  }
+
+  // Try primary (Nominatim), then fallback to Google Maps
+  const nomSuccess = await tryNominatim();
+  if (!nomSuccess) {
+    console.log(`[Geocoding] Nominatim failed, trying Google Maps fallback...`);
+    await tryGoogleMaps();
+  }
   
-  // Return result (empty if all retries failed)
+  // Return result (empty if all services failed)
   res.json(result || []);
 }));
 
