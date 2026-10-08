@@ -777,11 +777,31 @@ export async function markNotificationAsRead(notificationId) {
 
 export async function deleteIncidentNote(shipmentId, noteId) {
   try {
+    console.log(`Attempting to delete incident note: shipmentId=${shipmentId}, noteId=${noteId}`);
+    
+    // Delete the incident note
     const noteRef = doc(db, 'shipments', shipmentId, 'notes', noteId);
     await deleteDoc(noteRef);
+    console.log(`Successfully deleted incident note ${noteId}`);
+    
+    // Cascade delete associated alerts linked by both shipmentId AND noteId
+    const alertsSnap = await getDocs(
+      query(collection(db, 'alerts'), 
+        where('shipmentId', '==', shipmentId),
+        where('noteId', '==', noteId)
+      )
+    );
+    console.log(`Found ${alertsSnap.docs.length} alerts to cascade delete`);
+    
+    const deleteAlertPromises = alertsSnap.docs.map(alertDoc => deleteDoc(alertDoc.ref));
+    await Promise.all(deleteAlertPromises);
+    
+    console.log(`Successfully deleted incident note ${noteId} and ${deleteAlertPromises.length} associated alerts`);
     return true;
   } catch (e) {
     console.error('Failed to delete incident note:', e);
+    console.error('Error code:', e.code);
+    console.error('Error message:', e.message);
     throw e;
   }
 }

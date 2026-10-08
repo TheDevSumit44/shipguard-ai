@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AlertTriangle, X, Loader } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { addIncidentNote } from '../services/firestoreService';
+import { useAuth } from '../contexts/AuthContext';
 
 const INCIDENT_TYPES = [
   { value: 'fuel_shortage', label: 'Fuel Shortage' },
@@ -25,10 +26,12 @@ const SEVERITY_LEVELS = [
 ];
 
 export default function IncidentReportModal({ isOpen, onClose, shipmentId, trackingId, fromNotification = false }) {
+  const { currentUser } = useAuth();
+  
   const [formData, setFormData] = useState({
     shipmentId: shipmentId || '',
     viewerName: '',
-    viewerEmail: '',
+    viewerEmail: currentUser?.email || '',
     incidentType: '',
     severity: '',
     text: '',
@@ -38,6 +41,16 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Update form email when user changes or modal opens
+  useEffect(() => {
+    if (isOpen && currentUser?.email) {
+      setFormData(prev => ({
+        ...prev,
+        viewerEmail: currentUser.email
+      }));
+    }
+  }, [isOpen, currentUser?.email]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -68,10 +81,10 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
       newErrors.viewerName = 'Your name is required';
     }
     if (!formData.viewerEmail || formData.viewerEmail.trim().length === 0) {
-      newErrors.viewerEmail = 'Your email is required';
+      newErrors.viewerEmail = 'Email is required (auto-filled from your account)';
     }
     if (formData.viewerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.viewerEmail)) {
-      newErrors.viewerEmail = 'Please enter a valid email address';
+      newErrors.viewerEmail = 'Invalid email format';
     }
     if (!formData.incidentType) {
       newErrors.incidentType = 'Incident type is required';
@@ -241,15 +254,13 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
                       name="viewerEmail"
                       type="email"
                       value={formData.viewerEmail}
-                      onChange={handleInputChange}
-                      placeholder="your.email@company.com"
-                      className={`w-full px-4 py-2.5 rounded-lg border ${
-                        errors.viewerEmail ? 'border-red-300' : 'border-slate-200'
-                      } bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all`}
+                      readOnly
+                      title="Your email is auto-filled from your account and cannot be changed"
+                      className={`w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 placeholder-slate-400 cursor-not-allowed opacity-75`}
                     />
-                    {errors.viewerEmail && (
-                      <p className="mt-1 text-xs text-red-600">{errors.viewerEmail}</p>
-                    )}
+                    <p className="mt-1 text-xs text-slate-500">
+                      This email is automatically set from your account and cannot be modified.
+                    </p>
                   </div>
                 </div>
 
