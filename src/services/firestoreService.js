@@ -685,3 +685,87 @@ export function subscribeToShipmentById(shipmentId, callback) {
     return () => {};
   }
 }
+
+// ──────────────────────────────────────────────────────
+// Incident Resolved Notifications
+// ──────────────────────────────────────────────────────
+
+export async function createResolvedNotification(shipmentId, viewerEmail, resolvedBy) {
+  try {
+    const notificationsRef = collection(db, 'incidentNotifications');
+    
+    const notification = {
+      shipmentId,
+      viewerEmail,
+      type: 'issue_resolved',
+      title: 'Incident Resolved',
+      message: `An incident for shipment ${shipmentId} has been resolved`,
+      resolvedBy,
+      createdAt: serverTimestamp(),
+      read: false
+    };
+
+    const docRef = await addDoc(notificationsRef, notification);
+    return { id: docRef.id, ...notification };
+  } catch (e) {
+    console.error('Failed to create resolved notification:', e);
+    throw e;
+  }
+}
+
+export async function getIncidentNotifications(viewerEmail) {
+  try {
+    const notificationsRef = collection(db, 'incidentNotifications');
+    const q = query(
+      notificationsRef,
+      where('viewerEmail', '==', viewerEmail),
+      orderBy('createdAt', 'desc')
+    );
+    const snap = await getDocs(q);
+    
+    return snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (e) {
+    console.error('Failed to fetch incident notifications:', e);
+    return [];
+  }
+}
+
+export function subscribeToIncidentNotifications(viewerEmail, callback) {
+  try {
+    const notificationsRef = collection(db, 'incidentNotifications');
+    const q = query(
+      notificationsRef,
+      where('viewerEmail', '==', viewerEmail),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsub = onSnapshot(q, (snap) => {
+      const notifications = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      callback(notifications);
+    }, (error) => {
+      console.error('Failed to subscribe to incident notifications:', error);
+      callback([]);
+    });
+
+    return unsub;
+  } catch (e) {
+    console.error('Failed to set up notifications subscription:', e);
+    return () => {};
+  }
+}
+
+export async function markNotificationAsRead(notificationId) {
+  try {
+    const notificationRef = doc(db, 'incidentNotifications', notificationId);
+    await updateDoc(notificationRef, { read: true });
+  } catch (e) {
+    console.error('Failed to mark notification as read:', e);
+    throw e;
+  }
+}

@@ -90,10 +90,27 @@ export default function ShipmentDetail() {
     const unsub = subscribeToShipmentById(id, (updatedShipment) => {
       if (updatedShipment) {
         const pred = predictDelay(updatedShipment);
+        
+        // Only overwrite with prediction if admin hasn't manually set riskLevel
+        // If admin has set it (incidentResponse flag), preserve their choice
+        const isAdminOverride = updatedShipment.incidentResponse === true;
+        
         updatedShipment.riskScore = pred.riskScore;
-        updatedShipment.riskLevel = pred.riskLevel;
-        updatedShipment.riskColor = pred.riskColor;
-        updatedShipment.estimatedDelay = pred.estimatedDelay;
+        // Preserve admin-set risk level if it was manually changed
+        if (!isAdminOverride) {
+          updatedShipment.riskLevel = pred.riskLevel;
+          updatedShipment.riskColor = pred.riskColor;
+        } else {
+          // Use admin's manually set risk level to determine color
+          const riskColors = { low: '#22c55e', medium: '#f59e0b', high: '#f97316', critical: '#ef4444' };
+          updatedShipment.riskColor = riskColors[updatedShipment.riskLevel] || pred.riskColor;
+        }
+        
+        // Preserve admin-set estimated delay if manually updated
+        if (!updatedShipment.estimatedDelay || updatedShipment.estimatedDelay === 0) {
+          updatedShipment.estimatedDelay = pred.estimatedDelay;
+        }
+        
         setShipment(updatedShipment);
         setPrediction(pred);
         setRecommendations(getRecommendations(pred, updatedShipment));

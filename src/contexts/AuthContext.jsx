@@ -105,6 +105,7 @@ export function AuthProvider({ children }) {
         integrations: DEFAULT_INTEGRATIONS,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        lastActive: serverTimestamp(),
       });
     } else {
       const existing = snap.data();
@@ -113,10 +114,11 @@ export function AuthProvider({ children }) {
       if (!existing.preferences) patch.preferences = DEFAULT_PREFERENCES;
       if (!existing.integrations) patch.integrations = DEFAULT_INTEGRATIONS;
 
-      if (Object.keys(patch).length > 0) {
-        patch.updatedAt = serverTimestamp();
-        await updateDoc(ref, patch);
-      }
+      // Always update lastActive on login
+      patch.lastActive = serverTimestamp();
+      patch.updatedAt = serverTimestamp();
+      
+      await updateDoc(ref, patch);
     }
     const updated = await getDoc(ref);
     setUserProfile({ id: updated.id, ...updated.data() });

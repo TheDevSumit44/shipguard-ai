@@ -5,7 +5,7 @@ import {
   ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Eye, Users, Database,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getShipments, getAlerts, getRouteRecommendations, subscribeToShipments, subscribeToAlerts, subscribeToRouteRecommendations, upsertRouteRecommendationForShipment, getDailyShipmentAggregates, getAllUsers, getUserShipments, getUserLastActive } from '../services/firestoreService';
 import { predictDelay } from '../lib/ml/delayPredictor';
@@ -398,9 +398,13 @@ export default function Dashboard() {
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
                 <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: '13px' }}
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: '13px', backgroundColor: '#ffffff', padding: '12px' }}
+                  formatter={(value) => [value.toLocaleString(), '']}
+                  labelFormatter={(label) => `${label}`}
+                  cursor={{ stroke: '#cbd5e1', strokeDasharray: '4' }}
                 />
-                <Area type="monotone" dataKey="shipments" stroke="#6366f1" fill="url(#shipGrad)" strokeWidth={2} name="Shipments" />
+                <Legend wrapperStyle={{ paddingTop: '16px' }} />
+                <Area type="monotone" dataKey="shipments" stroke="#6366f1" fill="url(#shipGrad)" strokeWidth={2} name="Total Shipments" />
                 <Area type="monotone" dataKey="atRisk" stroke="#ef4444" fill="url(#riskGrad)" strokeWidth={2} name="At Risk" />
               </AreaChart>
             </ResponsiveContainer>

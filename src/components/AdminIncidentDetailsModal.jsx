@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, MapPin, Clock, AlertTriangle, Save, Loader, Phone, Mail, Send } from 'lucide-react';
+import { X, MapPin, Clock, AlertTriangle, Save, Loader, Phone, Mail, Send, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { updateShipment, getShipmentById } from '../services/firestoreService';
+import { updateShipment, getShipmentById, createResolvedNotification } from '../services/firestoreService';
 import toast from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext';
 
 const INCIDENT_LABELS = {
   fuel_shortage: 'Fuel Shortage',
@@ -25,11 +26,13 @@ const SEVERITY_COLORS = {
 };
 
 export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNote, shipmentId }) {
+  const { user } = useAuth();
   const [shipment, setShipment] = useState(null);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   const [updateFormData, setUpdateFormData] = useState({
     status: '',
@@ -114,6 +117,31 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
       });
     } catch (error) {
       toast.error('Failed to send contact message');
+    }
+  };
+
+  const handleMarkAsResolved = async () => {
+    if (!incidentNote?.viewerEmail) {
+      toast.error('Viewer email not found. Cannot send notification.');
+      return;
+    }
+
+    setResolving(true);
+    try {
+      // Create resolved notification for viewer
+      await createResolvedNotification(
+        shipmentId,
+        incidentNote.viewerEmail,
+        user?.email || 'admin@shipguard.com'
+      );
+
+      toast.success('Incident marked as resolved! Notification sent to viewer.');
+      onClose();
+    } catch (error) {
+      console.error('Failed to mark as resolved:', error);
+      toast.error('Failed to mark incident as resolved');
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -265,6 +293,23 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                       >
                         <Send className="w-4 h-4" />
                         Contact Official
+                      </button>
+                      <button
+                        onClick={handleMarkAsResolved}
+                        disabled={resolving}
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:bg-slate-100 disabled:text-slate-400 font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        {resolving ? (
+                          <>
+                            <Loader className="w-4 h-4 animate-spin" />
+                            Resolving...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Mark as Resolved
+                          </>
+                        )}
                       </button>
                     </div>
 
