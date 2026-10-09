@@ -373,8 +373,8 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                       </div>
                     )}
 
-                    {/* Action Buttons - Always Visible */}
-                    <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4 flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    {/* Action Buttons - Part of scrollable content */}
+                    <div className="bg-white border-t border-slate-200 -mx-6 px-6 py-4 flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
                       <button
                         onClick={() => {
                           setShowUpdateForm(!showUpdateForm);
