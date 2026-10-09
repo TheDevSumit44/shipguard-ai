@@ -216,7 +216,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/30 z-40"
+            className="fixed -top-96 -left-96 -right-96 -bottom-96 bg-black/30 z-[100]"
           />
 
           {/* Modal */}
@@ -224,10 +224,10 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[101] flex items-center justify-center"
             onClick={e => e.stopPropagation()}
           >
-            <div className="bg-white rounded-2xl shadow-lg max-w-3xl w-full max-h-[95vh] overflow-y-auto flex flex-col">
+            <div className="bg-white rounded-2xl shadow-lg max-w-3xl w-[calc(100%-2rem)] max-h-[95vh] overflow-y-auto flex flex-col mx-4 my-4">
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -341,7 +341,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                     {shipment && (
                       <div className="border border-slate-200 rounded-lg p-3 mb-3">
                         <h3 className="font-semibold text-slate-800 text-sm mb-2">Current Shipment Status</h3>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                           <div>
                             <p className="text-slate-500 mb-0.5">Status</p>
                             <p className="font-medium capitalize">{shipment.status}</p>
@@ -365,7 +365,7 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                             <p className="text-slate-500 mb-0.5">Est. Delay</p>
                             <p className="font-medium">{shipment.estimatedDelay || 0} hours</p>
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-1 sm:col-span-2">
                             <p className="text-slate-500 mb-0.5">Route</p>
                             <p className="font-medium text-xs">{shipment.origin} → {shipment.destination}</p>
                           </div>
@@ -374,41 +374,44 @@ export default function AdminIncidentDetailsModal({ isOpen, onClose, incidentNot
                     )}
 
                     {/* Action Buttons - Always Visible */}
-                    <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4 flex gap-3">
+                    <div className="sticky bottom-0 bg-white border-t border-slate-200 -mx-6 -mb-6 px-6 py-4 flex flex-col sm:flex-row gap-2 sm:gap-3">
                       <button
                         onClick={() => {
                           setShowUpdateForm(!showUpdateForm);
-                          if (!showUpdateForm) setShowContactForm(false); // Close contact form when opening update
+                          if (!showUpdateForm) setShowContactForm(false);
                         }}
-                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-xs sm:text-sm transition-colors flex items-center justify-center gap-2"
                       >
                         <Save className="w-4 h-4" />
-                        Update Shipment
+                        <span className="hidden sm:inline">Update Shipment</span>
+                        <span className="sm:hidden">Update</span>
                       </button>
                       <button
                         onClick={() => {
                           setShowContactForm(!showContactForm);
-                          if (!showContactForm) setShowUpdateForm(false); // Close update form when opening contact
+                          if (!showContactForm) setShowUpdateForm(false);
                         }}
-                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium text-xs sm:text-sm transition-colors flex items-center justify-center gap-2"
                       >
                         <Send className="w-4 h-4" />
-                        Contact Official
+                        <span className="hidden sm:inline">Contact Official</span>
+                        <span className="sm:hidden">Contact</span>
                       </button>
                       <button
                         onClick={handleMarkAsResolved}
                         disabled={resolving}
-                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:bg-slate-100 disabled:text-slate-400 font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:bg-slate-100 disabled:text-slate-400 font-medium text-xs sm:text-sm transition-colors flex items-center justify-center gap-2"
                       >
                         {resolving ? (
                           <>
                             <Loader className="w-4 h-4 animate-spin" />
-                            Resolving...
+                            <span className="hidden sm:inline">Resolving...</span>
                           </>
                         ) : (
                           <>
                             <Check className="w-4 h-4" />
-                            Mark as Resolved
+                            <span className="hidden sm:inline">Mark as Resolved</span>
+                            <span className="sm:hidden">Resolve</span>
                           </>
                         )}
                       </button>
