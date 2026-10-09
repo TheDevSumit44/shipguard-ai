@@ -169,7 +169,7 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/30 z-40"
+            className="fixed -top-96 -left-96 -right-96 -bottom-96 bg-black/30 z-[100]"
           />
 
           {/* Modal */}
@@ -177,10 +177,11 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[101] flex items-center justify-center"
             onClick={e => e.stopPropagation()}
           >
-            <div className="bg-white rounded-2xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-lg max-w-2xl w-[calc(100%-2rem)] h-[calc(100vh-2rem)] sm:h-auto sm:max-h-[90vh] overflow-y-auto mx-4 my-4"
+            >
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -226,7 +227,7 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
                 )}
 
                 {/* Viewer Information */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="viewerName" className="block text-sm font-semibold text-slate-700 mb-2">
                       Your Name <span className="text-red-500">*</span>
@@ -297,7 +298,7 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Severity Level <span className="text-red-500">*</span>
                   </label>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {SEVERITY_LEVELS.map(level => (
                       <button
                         key={level.value}
@@ -308,7 +309,7 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
                             setErrors(prev => ({ ...prev, severity: '' }));
                           }
                         }}
-                        className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
+                        className={`py-2 sm:py-2.5 px-2 sm:px-3 rounded-lg border-2 font-medium text-xs sm:text-sm transition-all cursor-pointer ${
                           formData.severity === level.value
                             ? `${level.color} border-current`
                             : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
@@ -355,7 +356,7 @@ export default function IncidentReportModal({ isOpen, onClose, shipmentId, track
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Current Location (Optional)
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="lat" className="block text-xs text-slate-500 mb-1">
                         Latitude

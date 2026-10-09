@@ -603,7 +603,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <button
               onClick={() => handleDataManagementClick()}
-              className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-left"
             >
               <div className="flex items-start justify-between mb-2">
                 <Users className="w-5 h-5 text-slate-400" />
